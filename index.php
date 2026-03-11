@@ -622,7 +622,7 @@ function render_client_summary(array $form): void
     echo '<li><strong>Objetivo do ano seguinte:</strong> busca principalmente em objetivos, usando o ano do bloco como referência quando disponível.</li>';
     echo '<li><strong>Caixas:</strong> tenta identificar descrições com volume, caixas ou CX.</li>';
     echo '<li><strong>Contrapartidas:</strong> são apresentadas de forma desagrupada, linha a linha, preservando a quantidade por ação.</li>';
-    echo '<li><strong>Sugestão de encartes:</strong> quando vier junto do bloco de contrapartidas, aparece separada no bloco próprio de encartes.</li>';
+    echo '<li><strong>Encartes obrigatórios / Sugestão de encartes:</strong> agora o parser lê múltiplas grades mensais dentro do mesmo bloco, como janeiro-junho e julho-dezembro.</li>';
     echo '<li><strong>Itens foco:</strong> lista os produtos encontrados e tenta consolidar volume mensal e volume do período.</li>';
     echo '<li><strong>Origem:</strong> ao lado de cada valor principal foi mantida a descrição de origem encontrada pelo parser.</li>';
     echo '</ul>';
@@ -933,7 +933,7 @@ function render_client_summary(array $form): void
 <div class="container">
     <h1>Importador de Excel - Navegação por Formulários e Blocos</h1>
     <p class="muted">
-        Esta versão oculta as colunas técnicas de contagem e linha, como <strong>row_excel</strong> e <strong>linha_ordem</strong>, sem alterar a navegação nem a apresentação geral.
+        Esta versão revisa o bloco de encartes para capturar múltiplas grades mensais dentro do mesmo formulário, mantendo o restante da navegação e da apresentação.
     </p>
 
     <form method="post" enctype="multipart/form-data">

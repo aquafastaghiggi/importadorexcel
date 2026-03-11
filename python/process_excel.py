@@ -222,7 +222,8 @@ def split_products_from_cell(text):
     if not text:
         return []
 
-    parts = re.split(r"\n|\r|[|]", str(text))
+    s = str(text).replace("\r", "\n")
+    parts = re.split(r"\n|[|]", s)
     out = []
     for p in parts:
         cleaned = p.strip()
@@ -804,11 +805,8 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
     return rows
 
 
-def parse_month_grid(rows_raw, header, sheet_name, form_index):
-    rows = []
-    ctx = build_context(header, sheet_name, form_index)
-    month_header_idx = None
-    month_cols = []
+def find_month_header_sections(rows_raw):
+    sections = []
 
     for idx, row in enumerate(rows_raw):
         months = []
@@ -816,50 +814,65 @@ def parse_month_grid(rows_raw, header, sheet_name, form_index):
             norm = normalize_text(cell["value"])
             if norm in MONTH_ALIASES:
                 months.append((cell["col_idx"], cell["value"], MONTH_ALIASES[norm]))
-        if len(months) >= 3:
-            month_header_idx = idx
-            month_cols = months
-            break
 
-    if month_header_idx is None:
+        if len(months) >= 3:
+            sections.append({
+                "header_idx": idx,
+                "month_cols": months
+            })
+
+    return sections
+
+
+def parse_month_grid(rows_raw, header, sheet_name, form_index):
+    rows = []
+    ctx = build_context(header, sheet_name, form_index)
+
+    sections = find_month_header_sections(rows_raw)
+    if not sections:
         return rows
 
-    line_visual = 0
-    for idx in range(month_header_idx + 1, len(rows_raw)):
-        row = rows_raw[idx]
-        cell_by_col = {c["col_idx"]: c["value"] for c in row["cells"]}
+    global_line_visual = 0
 
-        added_any = False
-        for col_idx, month_label, month_num in month_cols:
-            cell_value = cell_by_col.get(col_idx)
-            if not cell_value:
-                continue
+    for s_idx, section in enumerate(sections):
+        start_idx = section["header_idx"] + 1
+        end_idx = len(rows_raw) - 1
+        if s_idx < len(sections) - 1:
+            end_idx = sections[s_idx + 1]["header_idx"] - 1
 
-            products = split_products_from_cell(cell_value)
-            for prod in products:
-                rows.append({
-                    **ctx,
-                    "tipo_registro": "encarte_obrigatorio",
-                    "mes": month_label,
-                    "mes_numero": month_num,
-                    "produto": prod,
-                    "linha_visual": line_visual + 1,
-                    "row_excel": row["row_excel"],
-                    "linha_original": row_to_joined(row)
-                })
-                added_any = True
+        month_cols = section["month_cols"]
 
-        if added_any:
-            line_visual += 1
+        for idx in range(start_idx, end_idx + 1):
+            row = rows_raw[idx]
+            cell_by_col = {c["col_idx"]: c["value"] for c in row["cells"]}
+
+            added_any = False
+            for col_idx, month_label, month_num in month_cols:
+                cell_value = cell_by_col.get(col_idx)
+                if not cell_value:
+                    continue
+
+                products = split_products_from_cell(cell_value)
+                for prod in products:
+                    rows.append({
+                        **ctx,
+                        "tipo_registro": "encarte_obrigatorio",
+                        "mes": month_label,
+                        "mes_numero": month_num,
+                        "produto": prod,
+                        "linha_visual": global_line_visual + 1,
+                        "row_excel": row["row_excel"],
+                        "linha_original": row_to_joined(row)
+                    })
+                    added_any = True
+
+            if added_any:
+                global_line_visual += 1
 
     return rows
 
 
 def split_contrapartidas_and_encartes(rows_raw):
-    """
-    Dentro do bloco CONTRAPARTIDAS, separa a parte de ações previstas
-    da parte de sugestão/encartes quando existir subtítulo interno.
-    """
     split_idx = None
     split_labels = {
         "SUGESTAO DE ENCARTES",
@@ -868,21 +881,21 @@ def split_contrapartidas_and_encartes(rows_raw):
         "ENCARTES OBRIGATÓRIOS",
     }
 
+    norm_split_labels = {normalize_text(x) for x in split_labels}
+
     for idx, row in enumerate(rows_raw):
         joined = normalize_text(row_to_joined(row))
         values = [normalize_text(c["value"]) for c in row["cells"]]
 
-        for label in split_labels:
-            nlabel = normalize_text(label)
-            if joined == nlabel or joined.startswith(nlabel):
+        for label in norm_split_labels:
+            if joined == label or joined.startswith(label):
                 split_idx = idx
                 break
 
         if split_idx is not None:
             break
 
-        # fallback: linha única com o subtítulo
-        if len(values) == 1 and values[0] in {normalize_text(x) for x in split_labels}:
+        if len(values) == 1 and values[0] in norm_split_labels:
             split_idx = idx
             break
 
