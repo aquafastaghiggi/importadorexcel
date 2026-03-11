@@ -40,6 +40,9 @@ MAIN_BLOCK_ALIASES = {
     ],
     "contrapartidas": [
         "CONTRAPARTIDAS",
+        "CONTRAPARTIDA",
+        "CONTRAPARTIDAS EM FUNCAO DO INVESTIMENTO",
+        "CONTRAPARTIDAS EM FUNÇÃO DO INVESTIMENTO",
     ],
     "encartes_obrigatorios": [
         "ENCARTES OBRIGATORIOS",
@@ -150,7 +153,21 @@ def value_to_str(value):
         return ""
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
-    return str(value).strip()
+    text = str(value)
+    text = text.replace("\xa0", " ")
+    return text.strip()
+
+
+def clean_scalar_text(value):
+    """
+    Para campos escalares: remove quebras internas sem destruir listas.
+    """
+    if value is None:
+        return ""
+    text = str(value).replace("\r", "\n")
+    text = re.sub(r"\n+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 def excel_col_letter(col_idx_zero_based):
@@ -166,7 +183,7 @@ def parse_number(text):
     if text is None:
         return None
 
-    raw = str(text).strip()
+    raw = clean_scalar_text(text)
     if not raw:
         return None
 
@@ -242,7 +259,7 @@ def normalize_period(raw_text):
             "periodo_status": "ausente"
         }
 
-    raw = str(raw_text).strip()
+    raw = clean_scalar_text(raw_text)
     t = normalize_text(raw)
 
     m = re.match(r"^(\d{1,2})\s*/\s*(\d{2,4})$", raw)
@@ -576,7 +593,7 @@ def slice_block_rows(grid, block_info):
 
 
 def row_to_joined(row_obj):
-    return " | ".join(cell["value"] for cell in row_obj["cells"])
+    return " | ".join(clean_scalar_text(cell["value"]) for cell in row_obj["cells"])
 
 
 def build_context(header, sheet_name, form_index):
@@ -602,7 +619,7 @@ def build_context(header, sheet_name, form_index):
 def find_label_in_row(cells, aliases):
     aliases_norm = {normalize_text(a).rstrip(":") for a in aliases}
     for pos, cell in enumerate(cells):
-        norm = normalize_text(cell["value"]).rstrip(":")
+        norm = normalize_text(clean_scalar_text(cell["value"])).rstrip(":")
         if norm in aliases_norm:
             return pos
     return None
@@ -612,7 +629,7 @@ def value_after_label(cells, label_pos):
     if label_pos is None:
         return None
     if label_pos + 1 < len(cells):
-        return cells[label_pos + 1]["value"]
+        return clean_scalar_text(cells[label_pos + 1]["value"])
     return None
 
 
@@ -630,7 +647,7 @@ def extract_header_from_block(rows_raw, label_found):
         "periodo_acoes_normalizado": None,
         "periodo_acoes_status": None,
         "numero_acordo": None,
-        "titulo_plano": label_found
+        "titulo_plano": clean_scalar_text(label_found)
     }
 
     for row in rows_raw:
@@ -689,8 +706,8 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
         if len(cells) < 2:
             continue
 
-        label = cells[0]["value"]
-        value = cells[-1]["value"]
+        label = clean_scalar_text(cells[0]["value"])
+        value = clean_scalar_text(cells[-1]["value"])
 
         norm_label = normalize_text(label)
         if norm_label in {
@@ -724,7 +741,7 @@ def detect_table_header_row(rows_raw, expected_headers):
     best_score = -1
 
     for idx, row in enumerate(rows_raw):
-        row_norms = [normalize_text(c["value"]) for c in row["cells"]]
+        row_norms = [normalize_text(clean_scalar_text(c["value"])) for c in row["cells"]]
         score = sum(1 for v in row_norms if v in expected_norm)
         if score > best_score:
             best_score = score
@@ -738,7 +755,7 @@ def detect_table_header_row(rows_raw, expected_headers):
 def build_column_map(header_cells, header_dict):
     col_map = {}
     for cell in header_cells:
-        norm = normalize_text(cell["value"])
+        norm = normalize_text(clean_scalar_text(cell["value"]))
         if norm in header_dict:
             col_map[cell["col_idx"]] = header_dict[norm]
     return col_map
@@ -760,7 +777,7 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
 
     for idx in range(header_row_idx + 1, len(rows_raw)):
         row = rows_raw[idx]
-        values = [c["value"] for c in row["cells"]]
+        values = [clean_scalar_text(c["value"]) for c in row["cells"]]
         norms = [normalize_text(v) for v in values]
 
         if section_rules:
@@ -788,7 +805,7 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
             col_idx = cell["col_idx"]
             if col_idx in col_map:
                 field = col_map[col_idx]
-                line_data[field] = cell["value"]
+                line_data[field] = clean_scalar_text(cell["value"])
                 filled_count += 1
 
         if filled_count >= 1:
@@ -811,9 +828,9 @@ def find_month_header_sections(rows_raw):
     for idx, row in enumerate(rows_raw):
         months = []
         for cell in row["cells"]:
-            norm = normalize_text(cell["value"])
+            norm = normalize_text(clean_scalar_text(cell["value"]))
             if norm in MONTH_ALIASES:
-                months.append((cell["col_idx"], cell["value"], MONTH_ALIASES[norm]))
+                months.append((cell["col_idx"], clean_scalar_text(cell["value"]), MONTH_ALIASES[norm]))
 
         if len(months) >= 3:
             sections.append({
@@ -885,7 +902,7 @@ def split_contrapartidas_and_encartes(rows_raw):
 
     for idx, row in enumerate(rows_raw):
         joined = normalize_text(row_to_joined(row))
-        values = [normalize_text(c["value"]) for c in row["cells"]]
+        values = [normalize_text(clean_scalar_text(c["value"])) for c in row["cells"]]
 
         for label in norm_split_labels:
             if joined == label or joined.startswith(label):
@@ -954,7 +971,7 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
 
         result["raw_blocks"].append({
             "block": block_info["block"],
-            "label_found": block_info["label_found"],
+            "label_found": clean_scalar_text(block_info["label_found"]),
             "start_row": block_info["start_row"] + 1,
             "end_row": block_info["end_row"] + 1,
             "total_rows_raw": len(rows_raw)

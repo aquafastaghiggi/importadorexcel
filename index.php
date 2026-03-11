@@ -442,8 +442,17 @@ function build_client_summary(array $form): array
 
         if ($summary['valor_total_periodo'] === null) {
             $isValorHistorico =
-                contains_any($desc, ['COMPRA']) &&
-                contains_any($desc, ['IMP', 'IMPOSTO', 'IMPOSTOS', 'VALOR']);
+                (
+                    contains_any($desc, ['COMPRA']) &&
+                    contains_any($desc, ['IMP', 'IMPOSTO', 'IMPOSTOS', 'VALOR'])
+                ) ||
+                contains_any($desc, [
+                    'COMPRA REALIZADA TOTAL COM CRESCIMENTO',
+                    'COMPRA 2025 EM VALOR',
+                    'COMPRA TOTAL 2025 EM VALOR',
+                    'COMPRA TOTAL EM VALOR',
+                    'COMPRA REALIZADA EM VALOR'
+                ]);
 
             if ($isValorHistorico && !contains_any($desc, ['OBJETIVO'])) {
                 $summary['valor_total_periodo'] = $valor;
@@ -453,8 +462,18 @@ function build_client_summary(array $form): array
 
         if ($summary['caixas_total_periodo'] === null) {
             $isCaixaHistorico =
-                contains_any($desc, ['VOLUME', 'CAIXAS', 'CX']) &&
-                !contains_any($desc, ['OBJETIVO']);
+                (
+                    contains_any($desc, ['VOLUME', 'CAIXAS', 'CX']) &&
+                    !contains_any($desc, ['OBJETIVO'])
+                ) ||
+                contains_any($desc, [
+                    'COMPRA MEDIA VOLUME',
+                    'COMPRA MÉDIA VOLUME',
+                    'COMPRA REALIZADA EM CXS',
+                    'COMPRA REALIZADA EM CX',
+                    'COMPRA TOTAL EM CX',
+                    'COMPRA TOTAL EM CAIXAS'
+                ]);
 
             if ($isCaixaHistorico) {
                 $summary['caixas_total_periodo'] = $valor;
@@ -525,12 +544,20 @@ function build_client_summary(array $form): array
 
         if ($summary['objetivo_ano_seguinte_valor'] === null) {
             $isValorObjetivo =
-                contains_any($desc, ['OBJETIVO']) &&
                 (
-                    contains_any($desc, ['VALOR']) ||
-                    contains_all($desc, ['COMPRA', 'IMP']) ||
-                    contains_any($desc, ['COMPRA C/ IMP', 'COMPRA C IMP', 'COMPRA COM IMPOSTO'])
-                );
+                    contains_any($desc, ['OBJETIVO']) &&
+                    (
+                        contains_any($desc, ['VALOR']) ||
+                        contains_all($desc, ['COMPRA', 'IMP']) ||
+                        contains_any($desc, ['COMPRA C/ IMP', 'COMPRA C IMP', 'COMPRA COM IMPOSTO'])
+                    )
+                ) ||
+                contains_any($desc, [
+                    'OBJETIVO DE COMPRA C/ IMPOSTOS',
+                    'OBJETIVO DE COMPRA COM IMPOSTOS',
+                    'OBJETIVO EM VALOR',
+                    'OBJETIVO TOTAL EM VALOR'
+                ]);
 
             if ($isValorObjetivo) {
                 $summary['objetivo_ano_seguinte_valor'] = $valor;
@@ -540,8 +567,15 @@ function build_client_summary(array $form): array
 
         if ($summary['objetivo_ano_seguinte_caixas'] === null) {
             $isCaixaObjetivo =
-                contains_any($desc, ['OBJETIVO']) &&
-                contains_any($desc, ['VOLUME', 'CAIXAS', 'CX']);
+                (
+                    contains_any($desc, ['OBJETIVO']) &&
+                    contains_any($desc, ['VOLUME', 'CAIXAS', 'CX'])
+                ) ||
+                contains_any($desc, [
+                    'OBJETIVO DE VOLUME',
+                    'OBJETIVO TOTAL DO PERIODO',
+                    'OBJETIVO TOTAL DO PERÍODO'
+                ]);
 
             if ($isCaixaObjetivo) {
                 $summary['objetivo_ano_seguinte_caixas'] = $valor;
@@ -574,6 +608,35 @@ function build_contrapartidas_detail(array $contrapartidasRows): array
     }
 
     return $out;
+}
+
+function build_client_index(array $resultado): array
+{
+    $clients = [];
+
+    foreach (($resultado['sheets'] ?? []) as $sheetIndex => $sheet) {
+        foreach (($sheet['forms'] ?? []) as $formIndex => $form) {
+            $cliente = trim((string)($form['header']['cliente'] ?? ''));
+            if ($cliente === '') {
+                $cliente = 'Sem nome';
+            }
+
+            $formId = 'sheet_' . $sheetIndex . '_form_' . ($form['formulario_index'] ?? ($formIndex + 1));
+
+            $clients[] = [
+                'cliente' => $cliente,
+                'target_id' => $formId,
+                'aba' => (string)($sheet['sheet_name'] ?? ''),
+                'formulario_index' => (string)($form['formulario_index'] ?? ($formIndex + 1)),
+            ];
+        }
+    }
+
+    usort($clients, function ($a, $b) {
+        return strcasecmp($a['cliente'], $b['cliente']);
+    });
+
+    return $clients;
 }
 
 function render_client_summary(array $form): void
@@ -620,11 +683,10 @@ function render_client_summary(array $form): void
     echo '<ul class="summary-list">';
     echo '<li><strong>Valor total e investimento no período:</strong> busca principalmente em histórico, descrição do investimento e investimentos extras.</li>';
     echo '<li><strong>Objetivo do ano seguinte:</strong> busca principalmente em objetivos, usando o ano do bloco como referência quando disponível.</li>';
-    echo '<li><strong>Caixas:</strong> tenta identificar descrições com volume, caixas ou CX.</li>';
+    echo '<li><strong>Caixas:</strong> tenta identificar descrições com volume, caixas ou CX, inclusive novas variações como compra média volume e compra total em valor.</li>';
     echo '<li><strong>Contrapartidas:</strong> são apresentadas de forma desagrupada, linha a linha, preservando a quantidade por ação.</li>';
-    echo '<li><strong>Encartes obrigatórios / Sugestão de encartes:</strong> agora o parser lê múltiplas grades mensais dentro do mesmo bloco, como janeiro-junho e julho-dezembro.</li>';
-    echo '<li><strong>Itens foco:</strong> lista os produtos encontrados e tenta consolidar volume mensal e volume do período.</li>';
-    echo '<li><strong>Origem:</strong> ao lado de cada valor principal foi mantida a descrição de origem encontrada pelo parser.</li>';
+    echo '<li><strong>Encartes obrigatórios / Sugestão de encartes:</strong> o parser agora lê múltiplas grades mensais dentro do mesmo bloco.</li>';
+    echo '<li><strong>Quebras de linha:</strong> campos escalares são limpos para reduzir ruído sem perder listas reais de produtos/encartes.</li>';
     echo '</ul>';
     echo '</div>';
 }
@@ -637,6 +699,10 @@ function render_client_summary(array $form): void
     <style>
         * {
             box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
@@ -712,6 +778,40 @@ function render_client_summary(array $form): void
             margin-bottom: 8px;
         }
 
+        .client-search-card {
+            background: #f7f9fc;
+            border: 1px solid #dfe7f1;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .client-search-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .client-search-row select {
+            min-width: 360px;
+            max-width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cdd8e5;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .client-search-row button {
+            padding: 10px 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background: #0f3b66;
+            color: #fff;
+            font-weight: bold;
+        }
+
         form {
             margin-bottom: 20px;
         }
@@ -768,6 +868,12 @@ function render_client_summary(array $form): void
             padding: 18px;
             margin-top: 20px;
             background: #ffffff;
+            scroll-margin-top: 28px;
+        }
+
+        .form-card.highlighted {
+            border-color: #0f3b66;
+            box-shadow: 0 0 0 3px rgba(15, 59, 102, 0.15);
         }
 
         .form-title {
@@ -926,6 +1032,10 @@ function render_client_summary(array $form): void
                 min-width: 100%;
                 position: static;
             }
+
+            .client-search-row select {
+                min-width: 100%;
+            }
         }
     </style>
 </head>
@@ -933,7 +1043,7 @@ function render_client_summary(array $form): void
 <div class="container">
     <h1>Importador de Excel - Navegação por Formulários e Blocos</h1>
     <p class="muted">
-        Esta versão revisa o bloco de encartes para capturar múltiplas grades mensais dentro do mesmo formulário, mantendo o restante da navegação e da apresentação.
+        Esta versão acrescenta reconhecimento de novas variações estruturais e um seletor de cliente para navegação direta.
     </p>
 
     <form method="post" enctype="multipart/form-data">
@@ -952,6 +1062,25 @@ function render_client_summary(array $form): void
                 <br>JSON técnico salvo em: <strong><?= e($jsonPath) ?></strong>
             <?php endif; ?>
         </div>
+
+        <?php $clientIndex = build_client_index($resultado); ?>
+        <?php if (!empty($clientIndex)): ?>
+            <div class="client-search-card">
+                <h2>Buscar cliente</h2>
+                <div class="client-search-row">
+                    <select id="clienteSelect">
+                        <option value="">Selecione um cliente...</option>
+                        <?php foreach ($clientIndex as $item): ?>
+                            <option value="<?= e($item['target_id']) ?>">
+                                <?= e($item['cliente']) ?> — aba <?= e($item['aba']) ?> — formulário <?= e($item['formulario_index']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" onclick="goToCliente()">Ir para cliente</button>
+                </div>
+                <p class="muted">Ao selecionar, a página navega diretamente até o formulário do cliente.</p>
+            </div>
+        <?php endif; ?>
 
         <div class="summary-card" id="topo">
             <h2>Resumo do processamento</h2>
@@ -991,13 +1120,14 @@ function render_client_summary(array $form): void
                             <?php
                             $availableBlocks = get_available_blocks($form);
                             $formSlug = $sheetSlug . '_form_' . ($form['formulario_index'] ?? ($formIndex + 1));
+                            $clienteForm = trim((string)($form['header']['cliente'] ?? ''));
                             ?>
-                            <div class="form-card form-anchor" id="<?= e($formSlug) ?>">
+                            <div class="form-card form-anchor" id="<?= e($formSlug) ?>" data-client="<?= e($clienteForm) ?>">
                                 <div class="form-title">
                                     <h3>Formulário <?= e($form['formulario_index'] ?? ($formIndex + 1)) ?></h3>
                                     <div class="form-badges">
-                                        <?php if (!empty($form['header']['cliente'])): ?>
-                                            <span class="badge">cliente: <?= e($form['header']['cliente']) ?></span>
+                                        <?php if (!empty($clienteForm)): ?>
+                                            <span class="badge">cliente: <?= e($clienteForm) ?></span>
                                         <?php endif; ?>
                                         <?php if (!empty($form['header']['titulo_plano'])): ?>
                                             <span class="badge">tipo: <?= e($form['header']['titulo_plano']) ?></span>
@@ -1122,5 +1252,33 @@ function render_client_summary(array $form): void
         <?php endif; ?>
     <?php endif; ?>
 </div>
+
+<script>
+function goToCliente() {
+    const select = document.getElementById('clienteSelect');
+    if (!select || !select.value) return;
+
+    const target = document.getElementById(select.value);
+    if (!target) return;
+
+    document.querySelectorAll('.form-card.highlighted').forEach(el => {
+        el.classList.remove('highlighted');
+    });
+
+    target.classList.add('highlighted');
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    setTimeout(() => {
+        target.classList.remove('highlighted');
+    }, 2500);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const select = document.getElementById('clienteSelect');
+    if (select) {
+        select.addEventListener('change', goToCliente);
+    }
+});
+</script>
 </body>
 </html>
