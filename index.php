@@ -262,7 +262,12 @@ function render_definition_list_block(array $rows, string $titulo, array $valueP
             continue;
         }
 
-        if (in_array('valor_original', $valuePercentColumns, true) && $valor !== '' && $valor !== null) {
+        if (
+            in_array('valor_original', $valuePercentColumns, true) &&
+            $valor !== '' &&
+            $valor !== null &&
+            should_format_definition_value_as_percent($descricao, $valor)
+        ) {
             $valor = format_percent_br($valor);
         }
 
@@ -274,6 +279,97 @@ function render_definition_list_block(array $rows, string $titulo, array $valueP
 
     echo '</div>';
     echo '</div>';
+}
+
+function format_business_value_by_description(string $descricao, $valor): string
+{
+    $valorTexto = trim((string)$valor);
+    if ($valorTexto === '') {
+        return '';
+    }
+
+    $descricaoNorm = normalize_cmp($descricao);
+
+    if (
+        contains_any($descricaoNorm, ['VALOR', 'INVESTIMENTO', 'COMPRA', 'PAGAMENTO']) &&
+        is_numeric(str_replace(',', '.', str_replace('.', '', $valorTexto))) === false
+    ) {
+        return $valorTexto;
+    }
+
+    if (is_numeric($valorTexto)) {
+        $tmp = (float)$valorTexto;
+    } else {
+        $tmp = str_replace('.', '', $valorTexto);
+        $tmp = str_replace(',', '.', $tmp);
+    }
+
+    if (
+        contains_any($descricaoNorm, ['VALOR', 'INVESTIMENTO', 'COMPRA', 'PAGAMENTO']) &&
+        is_numeric($tmp)
+    ) {
+        return 'R$ ' . format_number_br((float)$tmp);
+    }
+
+    if (
+        contains_any($descricaoNorm, ['CRESCIMENTO', 'SHARE', 'MARGEM', 'PERCENTUAL']) &&
+        !contains_any($descricaoNorm, ['VALOR DO SHARE'])
+    ) {
+        return format_percent_br($valor);
+    }
+
+    return $valorTexto;
+}
+
+function is_descriptive_metric_rows(array $rows): bool
+{
+    if (empty($rows)) {
+        return false;
+    }
+
+    foreach ($rows as $row) {
+        if (!array_key_exists('descricao', $row)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function render_descriptive_metric_table(array $rows, string $titulo): void
+{
+    $displayRows = [];
+    foreach ($rows as $row) {
+        $displayRows[] = [
+            'descricao' => $row['descricao'] ?? '',
+            'valor_original' => format_business_value_by_description(
+                (string)($row['descricao'] ?? ''),
+                $row['valor_original'] ?? ''
+            ),
+        ];
+    }
+
+    render_assoc_table($displayRows, $titulo, null, ['descricao', 'valor_original']);
+}
+
+function should_format_definition_value_as_percent(string $descricao, $valor): bool
+{
+    $descricaoNorm = normalize_cmp($descricao);
+    $valorTexto = trim((string)$valor);
+
+    if ($valorTexto === '') {
+        return false;
+    }
+
+    if (strpos($valorTexto, '%') !== false) {
+        return true;
+    }
+
+    if (contains_any($descricaoNorm, ['PERCENTUAL', 'PERCENTAGEM', 'RETORNO FINANCEIRO'])) {
+        return true;
+    }
+
+    return false;
 }
 
 function infer_business_columns(array $rows): array
@@ -409,13 +505,19 @@ function render_sectioned_records(array $rows, string $titulo, string $defaultPr
     foreach ($grouped as $group) {
         $meta = section_category_meta($group['category']);
         $sectionLabel = $group['section'] !== '' ? $group['section'] : $defaultPrefix;
+        $columns = array_values(array_filter(
+            infer_business_columns($group['rows']),
+            static function ($column): bool {
+                return !in_array($column, ['categoria_secao', 'secao_interna'], true);
+            }
+        ));
         echo '<div class="section-group">';
         echo '<div class="section-group-header">';
         echo '<span class="section-badge accent-' . e($meta['accent']) . '">' . e($meta['label']) . '</span>';
         echo '<h4>' . e($sectionLabel) . '</h4>';
         echo '<span class="muted">' . e(count($group['rows']) . ' registro(s)') . '</span>';
         echo '</div>';
-        render_assoc_table($group['rows'], $sectionLabel, 'tipo_registro');
+        render_assoc_table($group['rows'], $sectionLabel, null, $columns);
         echo '</div>';
     }
 
@@ -465,10 +567,12 @@ function block_meta(string $blockKey): array
         'objetivos_rows' => ['label' => 'Objetivos', 'icon' => '🎯'],
         'descricao_investimento_rows' => ['label' => 'Descrição do investimento', 'icon' => '💰'],
         'contrapartidas_rows' => ['label' => 'Contrapartidas', 'icon' => '🧩'],
+        'contrapartidas_encartes_mensal_rows' => ['label' => 'Contrapartidas - Encartes mensal', 'icon' => '🧩'],
         'contrapartidas_itens_foco_rows' => ['label' => 'Contrapartidas - Itens foco', 'icon' => '📦'],
         'contrapartidas_acoes_rows' => ['label' => 'Contrapartidas - Ações', 'icon' => '🧩'],
         'encartes_obrigatorios_rows' => ['label' => 'Encartes obrigatórios / Sugestão de encartes', 'icon' => '🗓️'],
         'encartes_sugestao_rows' => ['label' => 'Encartes sugestão', 'icon' => '🗓️'],
+        'objetivo_compra_rows' => ['label' => 'Objetivo compra', 'icon' => '📊'],
         'cadastros_vinculados_rows' => ['label' => 'Cadastros vinculados', 'icon' => '🧾'],
         'situacao_liberacao_rows' => ['label' => 'Situação liberação', 'icon' => '🧾'],
         'oportunidades_cadastros_rows' => ['label' => 'Oportunidades de cadastro', 'icon' => '🧾'],
@@ -483,8 +587,8 @@ function block_meta(string $blockKey): array
 
 function has_block_content(array $form, string $blockKey): bool
 {
-    if ($blockKey === 'resumo_analitico') {
-        return true;
+    if (in_array($blockKey, ['resumo_analitico', 'raw_blocks'], true)) {
+        return false;
     }
 
     if (!array_key_exists($blockKey, $form)) {
@@ -512,10 +616,12 @@ function get_available_blocks(array $form): array
         'objetivos_rows',
         'descricao_investimento_rows',
         'contrapartidas_rows',
+        'contrapartidas_encartes_mensal_rows',
         'contrapartidas_itens_foco_rows',
         'contrapartidas_acoes_rows',
         'encartes_obrigatorios_rows',
         'encartes_sugestao_rows',
+        'objetivo_compra_rows',
         'cadastros_vinculados_rows',
         'situacao_liberacao_rows',
         'oportunidades_cadastros_rows',
@@ -547,10 +653,14 @@ function app_block_meta(string $blockKey): array
         'descricao_investimento_compacto_rows' => ['label' => 'Descrição do investimento - layout compacto', 'icon' => '💰'],
         'premissas_gerais_rows' => ['label' => 'Premissas gerais', 'icon' => '📝'],
         'contrapartidas_rows' => ['label' => 'Contrapartidas', 'icon' => '🧩'],
+        'contrapartidas_encartes_mensal_rows' => ['label' => 'Contrapartidas - Encartes mensal', 'icon' => '🧩'],
         'contrapartidas_itens_foco_rows' => ['label' => 'Contrapartidas - Itens foco', 'icon' => '📦'],
         'contrapartidas_acoes_rows' => ['label' => 'Contrapartidas - Ações', 'icon' => '🧩'],
+        'contrapartidas_itens_acao_obrigatorios_rows' => ['label' => 'Contrapartidas - Itens em ação obrigatórios', 'icon' => '🗓️'],
+        'contrapartidas_itens_ponta_gondola_obrigatorios_rows' => ['label' => 'Contrapartidas - Itens ponta de gôndola obrigatórios', 'icon' => '🗓️'],
         'encartes_obrigatorios_rows' => ['label' => 'Encartes obrigatórios', 'icon' => '🗓️'],
         'encartes_sugestao_rows' => ['label' => 'Encartes sugestão', 'icon' => '🗓️'],
+        'objetivo_compra_rows' => ['label' => 'Objetivo compra', 'icon' => '📊'],
         'cadastros_vinculados_rows' => ['label' => 'Cadastros vinculados', 'icon' => '🧾'],
         'situacao_liberacao_rows' => ['label' => 'Situação de liberação', 'icon' => '🧾'],
         'oportunidades_cadastros_rows' => ['label' => 'Oportunidades de cadastro', 'icon' => '🧾'],
@@ -576,10 +686,14 @@ function app_get_available_blocks(array $form): array
         'descricao_investimento_compacto_rows',
         'premissas_gerais_rows',
         'contrapartidas_rows',
+        'contrapartidas_encartes_mensal_rows',
         'contrapartidas_itens_foco_rows',
         'contrapartidas_acoes_rows',
+        'contrapartidas_itens_acao_obrigatorios_rows',
+        'contrapartidas_itens_ponta_gondola_obrigatorios_rows',
         'encartes_obrigatorios_rows',
         'encartes_sugestao_rows',
+        'objetivo_compra_rows',
         'cadastros_vinculados_rows',
         'situacao_liberacao_rows',
         'oportunidades_cadastros_rows',
@@ -1609,18 +1723,22 @@ function render_client_summary_v2(array $form): void
                                                 <?php render_assoc_table($form['plano_negocios_rows'], 'Tabela simulada: plano_negocios'); ?>
 
                                             <?php elseif ($blockKey === 'historico_rows'): ?>
-                                                <?php render_assoc_table($form['historico_rows'], 'Tabela simulada: historico', 'descricao'); ?>
+                                                <?php render_descriptive_metric_table($form['historico_rows'], 'Tabela simulada: historico'); ?>
 
                                             <?php elseif ($blockKey === 'objetivos_rows'): ?>
-                                                <?php
-                                                $objetivosColumns = infer_business_columns($form['objetivos_rows']);
-                                                render_assoc_table(
-                                                    $form['objetivos_rows'],
-                                                    'Objetivos',
-                                                    null,
-                                                    !empty($objetivosColumns) ? $objetivosColumns : null
-                                                );
-                                                ?>
+                                                <?php if (is_descriptive_metric_rows($form['objetivos_rows'])): ?>
+                                                    <?php render_descriptive_metric_table($form['objetivos_rows'], 'Objetivos'); ?>
+                                                <?php else: ?>
+                                                    <?php
+                                                    $objetivosColumns = infer_business_columns($form['objetivos_rows']);
+                                                    render_assoc_table(
+                                                        $form['objetivos_rows'],
+                                                        'Objetivos',
+                                                        null,
+                                                        !empty($objetivosColumns) ? $objetivosColumns : null
+                                                    );
+                                                    ?>
+                                                <?php endif; ?>
 
                                             <?php elseif ($blockKey === 'objetivos_compactos_rows'): ?>
                                                 <?php
@@ -1658,19 +1776,61 @@ function render_client_summary_v2(array $form): void
                                                 ); ?>
 
                                             <?php elseif ($blockKey === 'contrapartidas_rows'): ?>
-                                                <?php render_assoc_table($form['contrapartidas_rows'], 'Tabela simulada: contrapartidas', 'linha_original'); ?>
+                                                <?php render_assoc_table(
+                                                    $form['contrapartidas_rows'],
+                                                    'Tabela simulada: contrapartidas',
+                                                    null,
+                                                    ['quantidade', 'tipo_acao', 'periodo', 'lojas', 'obs']
+                                                ); ?>
 
                                             <?php elseif ($blockKey === 'contrapartidas_itens_foco_rows'): ?>
-                                                <?php render_assoc_table($form['contrapartidas_itens_foco_rows'], 'Tabela simulada: contrapartidas_itens_foco', 'linha_original'); ?>
+                                                <?php render_assoc_table(
+                                                    $form['contrapartidas_itens_foco_rows'],
+                                                    'Tabela simulada: contrapartidas_itens_foco',
+                                                    null,
+                                                    ['produto', 'volume_mensal', 'volume_periodo', 'unidade']
+                                                ); ?>
+
+                                            <?php elseif ($blockKey === 'contrapartidas_encartes_mensal_rows'): ?>
+                                                <?php render_assoc_table(
+                                                    $form['contrapartidas_encartes_mensal_rows'],
+                                                    'Encartes mensal',
+                                                    null,
+                                                    ['quantidade', 'tipo_acao', 'periodo', 'lojas']
+                                                ); ?>
 
                                             <?php elseif ($blockKey === 'contrapartidas_acoes_rows'): ?>
                                                 <?php render_assoc_table($form['contrapartidas_acoes_rows'], 'Tabela simulada: contrapartidas_acoes', 'linha_original'); ?>
+
+                                            <?php elseif ($blockKey === 'contrapartidas_itens_acao_obrigatorios_rows'): ?>
+                                                <?php render_assoc_table(
+                                                    $form['contrapartidas_itens_acao_obrigatorios_rows'],
+                                                    'Itens em ação obrigatórios',
+                                                    null,
+                                                    ['mes', 'produto']
+                                                ); ?>
+
+                                            <?php elseif ($blockKey === 'contrapartidas_itens_ponta_gondola_obrigatorios_rows'): ?>
+                                                <?php render_assoc_table(
+                                                    $form['contrapartidas_itens_ponta_gondola_obrigatorios_rows'],
+                                                    'Itens ponta de gôndola obrigatórios',
+                                                    null,
+                                                    ['mes', 'produto']
+                                                ); ?>
 
                                             <?php elseif ($blockKey === 'encartes_obrigatorios_rows'): ?>
                                                 <?php render_assoc_table($form['encartes_obrigatorios_rows'], 'Encartes obrigatórios', 'mes'); ?>
 
                                             <?php elseif ($blockKey === 'encartes_sugestao_rows'): ?>
                                                 <?php render_assoc_table($form['encartes_sugestao_rows'], 'Encartes sugestão', 'mes'); ?>
+
+                                            <?php elseif ($blockKey === 'objetivo_compra_rows'): ?>
+                                                <?php render_assoc_table(
+                                                    $form['objetivo_compra_rows'],
+                                                    'Objetivo compra',
+                                                    null,
+                                                    ['produto', 'embalagem', 'objetivo_trimestral']
+                                                ); ?>
 
                                             <?php elseif ($blockKey === 'cadastros_vinculados_rows'): ?>
                                                 <?php render_sectioned_records(
