@@ -38,11 +38,19 @@ MAIN_BLOCK_ALIASES = {
         "CONTRAPARTIDAS ITENS FOCO",
         "ITENS FOCO",
     ],
+    "contrapartidas_acoes": [
+        "CONTRAPARTIDAS - ACOES",
+        "CONTRAPARTIDAS - AÇÕES",
+    ],
     "contrapartidas": [
         "CONTRAPARTIDAS",
         "CONTRAPARTIDA",
         "CONTRAPARTIDAS EM FUNCAO DO INVESTIMENTO",
         "CONTRAPARTIDAS EM FUNÇÃO DO INVESTIMENTO",
+    ],
+    "encartes_sugestao": [
+        "ENCARTES SUGESTAO",
+        "ENCARTES SUGESTÃO",
     ],
     "encartes_obrigatorios": [
         "ENCARTES OBRIGATORIOS",
@@ -62,6 +70,14 @@ MAIN_BLOCK_ALIASES = {
     "SITUAÇÃO LIBERAÇÃO",
     "SITUACAO DA LIBERACAO",
     "SITUAÇÃO DA LIBERAÇÃO",
+    ],
+    "oportunidades_cadastros_liberacoes": [
+        "OPORTUNIDADE DE CADASTROS | LIBERACOES",
+        "OPORTUNIDADE DE CADASTROS | LIBERAÇÕES",
+        "OPORTUNIDADES DE CADASTROS | LIBERACOES",
+        "OPORTUNIDADES DE CADASTROS | LIBERAÇÕES",
+        "OPORTUNIDADES DE CADATROS | LIBERACOES",
+        "OPORTUNIDADES DE CADATROS | LIBERAÇÕES",
     ],
     "investimentos_extras": [
         "INVESTIMENTOS EXTRAS",
@@ -584,9 +600,12 @@ def is_valid_form_region(headers_found):
         "descricao_investimento",
         "contrapartidas",
         "contrapartidas_itens_foco",
+        "contrapartidas_acoes",
         "encartes_obrigatorios",
+        "encartes_sugestao",
         "cadastros_vinculados",
         "situacao_liberacao",
+        "oportunidades_cadastros_liberacoes",
         "investimentos_extras",
     }
 
@@ -812,6 +831,19 @@ def detect_table_header_row(rows_raw, expected_headers):
     return None
 
 
+def find_table_header_rows(rows_raw, expected_headers, min_matches=2):
+    expected_norm = set(normalize_text(x) for x in expected_headers.keys())
+    header_rows = []
+
+    for idx, row in enumerate(rows_raw):
+        row_norms = [normalize_text(clean_scalar_text(c["value"])) for c in row["cells"]]
+        score = sum(1 for v in row_norms if v in expected_norm)
+        if score >= min_matches:
+            header_rows.append(idx)
+
+    return header_rows
+
+
 def build_column_map(header_cells, header_dict):
     col_map = {}
     for cell in header_cells:
@@ -819,6 +851,49 @@ def build_column_map(header_cells, header_dict):
         if norm in header_dict:
             col_map[cell["col_idx"]] = header_dict[norm]
     return col_map
+
+
+def split_rows_from_marker(rows, marker_text):
+    marker_norm = normalize_text(marker_text)
+    split_idx = None
+
+    for idx, row in enumerate(rows):
+        desc_norm = normalize_text(row.get("descricao"))
+        if desc_norm == marker_norm:
+            split_idx = idx
+            break
+
+    if split_idx is None:
+        return rows, []
+
+    return rows[:split_idx], rows[split_idx:]
+
+
+def categorize_section_label(section_label):
+    norm_label = normalize_text(section_label)
+    if not norm_label:
+        return None
+
+    if "RETIRAR" in norm_label:
+        return "retirada_cadastro"
+    if "SUBSTITUICAO" in norm_label:
+        return "substituicao_liberacao"
+    if "SUGESTAO" in norm_label and "CADASTR" in norm_label:
+        return "sugestao_cadastro"
+    if "SUGESTAO" in norm_label and "LIBERAC" in norm_label:
+        return "sugestao_liberacao"
+    if "OPORTUNIDADE" in norm_label and "CADASTR" in norm_label:
+        return "oportunidade_cadastro"
+    if "LIBERACAO SCANNTECH" in norm_label or "SCANNTECH" in norm_label:
+        return "liberacao_scanntech"
+    if "OBJETIVO COMPRA" in norm_label:
+        return "objetivo_compra"
+    if "LIBERAC" in norm_label:
+        return "liberacao"
+    if "CADASTR" in norm_label:
+        return "cadastro"
+
+    return "secao_especial"
 
 
 #ajuste aqui ler o bloco sibstituição liberacao
@@ -878,6 +953,7 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
 
         if current_section:
             line_data["secao_interna"] = current_section
+            line_data["categoria_secao"] = categorize_section_label(current_section)
 
         filled_count = 0
         for cell in row["cells"]:
@@ -970,13 +1046,227 @@ def parse_month_grid(rows_raw, header, sheet_name, form_index):
     return rows
 
 
+def slugify_column_name(label):
+    norm = normalize_text(label)
+    norm = re.sub(r"[^A-Z0-9]+", "_", norm).strip("_")
+    return norm.lower() or "coluna"
+
+
+def parse_objectives_table(rows_raw, header, sheet_name, form_index, title_year=None):
+    ctx = build_context(header, sheet_name, form_index)
+    header_idx = None
+
+    for idx, row in enumerate(rows_raw):
+        values = [clean_scalar_text(c["value"]) for c in row["cells"] if clean_scalar_text(c["value"])]
+        if len(values) >= 3 and "OBJETIVOS" not in normalize_text(" | ".join(values)):
+            header_idx = idx
+            break
+
+    if header_idx is None:
+        return []
+
+    header_cells = rows_raw[header_idx]["cells"]
+    columns = []
+    seen = {}
+    for cell in header_cells:
+        label = clean_scalar_text(cell["value"])
+        if not label:
+            continue
+        key = slugify_column_name(label)
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] > 1:
+            key = f"{key}_{seen[key]}"
+        columns.append((cell["col_idx"], key))
+
+    if len(columns) < 3:
+        return []
+
+    rows = []
+    line_order = 0
+    for idx in range(header_idx + 1, len(rows_raw)):
+        row = rows_raw[idx]
+        cell_by_col = {c["col_idx"]: clean_scalar_text(c["value"]) for c in row["cells"]}
+
+        item = {
+            **ctx,
+            "tipo_registro": "objetivo_tabela",
+            "ano_bloco": title_year,
+            "row_excel": row["row_excel"],
+            "linha_original": row_to_joined(row),
+        }
+
+        filled = 0
+        for col_idx, key in columns:
+            value = cell_by_col.get(col_idx, "")
+            if value != "":
+                item[key] = value
+                filled += 1
+
+        if filled >= 2:
+            line_order += 1
+            item["linha_ordem"] = line_order
+            rows.append(remove_empty_fields(item))
+
+    return rows
+
+
+def cluster_row_cells(cells, min_gap=4):
+    ordered = sorted(cells, key=lambda c: c["col_idx"])
+    clusters = []
+
+    for cell in ordered:
+        if not clusters:
+            clusters.append([cell])
+            continue
+
+        if cell["col_idx"] - clusters[-1][-1]["col_idx"] > min_gap:
+            clusters.append([cell])
+        else:
+            clusters[-1].append(cell)
+
+    return clusters
+
+
+def parse_compact_side_pairs(rows_raw, header, sheet_name, form_index, tipo_registro, title_year=None, ignored_titles=None):
+    rows = []
+    ctx = build_context(header, sheet_name, form_index)
+    ignored_titles = {normalize_text(x) for x in (ignored_titles or [])}
+    last_row_by_side = {}
+    line_order = 0
+
+    for row in rows_raw:
+        clusters = cluster_row_cells(row["cells"])
+        for cluster_index, cluster in enumerate(clusters[:2]):
+            values = [clean_scalar_text(c["value"]) for c in cluster if clean_scalar_text(c["value"])]
+            if not values:
+                continue
+
+            first_norm = normalize_text(values[0])
+            if first_norm in ignored_titles:
+                continue
+
+            side = "esquerda" if cluster_index == 0 else "direita"
+
+            if len(values) >= 2 and not values[1].strip().endswith(":"):
+                item = {
+                    **ctx,
+                    "tipo_registro": tipo_registro,
+                    "lado_layout": side,
+                    "descricao": values[0],
+                    "valor_original": values[1],
+                    "valor_numerico": parse_number(values[1]),
+                    "unidade": detect_unit(f"{values[0]} {values[1]}"),
+                    "ano_bloco": title_year,
+                    "row_excel": row["row_excel"],
+                    "linha_original": row_to_joined(row),
+                }
+                if len(values) > 2:
+                    item["observacao"] = " | ".join(values[2:])
+                line_order += 1
+                item["linha_ordem"] = line_order
+                rows.append(remove_empty_fields(item))
+                last_row_by_side[side] = rows[-1]
+            elif len(values) == 1 and side in last_row_by_side and first_norm not in ignored_titles:
+                existing_note = last_row_by_side[side].get("observacao")
+                note = values[0]
+                last_row_by_side[side]["observacao"] = f"{existing_note} | {note}" if existing_note else note
+
+    return rows
+
+
+def parse_stok_objetivo_compra_table(rows_raw, header, sheet_name, form_index):
+    ctx = build_context(header, sheet_name, form_index)
+    anchor_idx = None
+
+    for idx, row in enumerate(rows_raw):
+        joined = normalize_text(row_to_joined(row))
+        if "OBJETIVO COMPRA" in joined and "GATILHO" in joined:
+            anchor_idx = idx
+            break
+
+    if anchor_idx is None:
+        return []
+
+    header_idx = None
+    for idx in range(anchor_idx + 1, len(rows_raw)):
+        joined = normalize_text(row_to_joined(rows_raw[idx]))
+        if "PRODUTO" in joined and "EMBALAGEM" in joined and "INVESTIMENTO" in joined:
+            header_idx = idx
+            break
+
+    if header_idx is None:
+        return []
+
+    col_aliases = {
+        "PRODUTO": "produto",
+        "EMBALAGEM": "embalagem",
+        "JANEIRO A JUNHO": "objetivo_janeiro_junho",
+        "JANEIRO À JUNHO": "objetivo_janeiro_junho",
+        "JULHO A DEZEMBRO": "objetivo_julho_dezembro",
+        "JULHO À DEZEMBRO": "objetivo_julho_dezembro",
+        "PERIODO": "periodo",
+        "PERÍODO": "periodo",
+        "ATINGIMENTO": "atingimento",
+        "INVESTIMENTO %": "investimento_percentual",
+    }
+
+    header_cells = rows_raw[header_idx]["cells"]
+    col_map = {}
+    for cell in header_cells:
+        norm = normalize_text(clean_scalar_text(cell["value"]))
+        if norm in col_aliases:
+            col_map[cell["col_idx"]] = col_aliases[norm]
+
+    rows = []
+    line_order = 0
+    for idx in range(header_idx + 1, len(rows_raw)):
+        row = rows_raw[idx]
+        values = [clean_scalar_text(c["value"]) for c in row["cells"] if clean_scalar_text(c["value"])]
+        if not values:
+            continue
+
+        item = {
+            **ctx,
+            "tipo_registro": "objetivo_compra_stok",
+            "row_excel": row["row_excel"],
+            "linha_original": row_to_joined(row),
+        }
+
+        filled = 0
+        for cell in row["cells"]:
+            field = col_map.get(cell["col_idx"])
+            if not field:
+                continue
+            value = clean_scalar_text(cell["value"])
+            if value != "":
+                item[field] = value
+                filled += 1
+
+        if filled >= 3:
+            line_order += 1
+            item["linha_ordem"] = line_order
+            rows.append(remove_empty_fields(item))
+
+    return rows
+
+
+def detect_encartes_block_name(label_found):
+    norm_label = normalize_text(label_found)
+    if "SUGESTAO" in norm_label:
+        return "encartes_sugestao"
+    return "encartes_obrigatorios"
+
+
 def split_contrapartidas_and_encartes(rows_raw):
     split_idx = None
+    encartes_block_name = None
     split_labels = {
         "SUGESTAO DE ENCARTES",
         "SUGESTÃO DE ENCARTES",
         "ENCARTES OBRIGATORIOS",
         "ENCARTES OBRIGATÓRIOS",
+        "ENCARTES SUGESTAO",
+        "ENCARTES SUGESTÃO",
     }
 
     norm_split_labels = {normalize_text(x) for x in split_labels}
@@ -988,6 +1278,7 @@ def split_contrapartidas_and_encartes(rows_raw):
         for label in norm_split_labels:
             if joined == label or joined.startswith(label):
                 split_idx = idx
+                encartes_block_name = detect_encartes_block_name(row_to_joined(row))
                 break
 
         if split_idx is not None:
@@ -995,14 +1286,106 @@ def split_contrapartidas_and_encartes(rows_raw):
 
         if len(values) == 1 and values[0] in norm_split_labels:
             split_idx = idx
+            encartes_block_name = detect_encartes_block_name(values[0])
             break
 
     if split_idx is None:
-        return rows_raw, []
+        return rows_raw, [], None
 
     contrapartidas_rows = rows_raw[:split_idx]
     encartes_rows = rows_raw[split_idx + 1:]
-    return contrapartidas_rows, encartes_rows
+    return contrapartidas_rows, encartes_rows, encartes_block_name
+
+
+def infer_section_bucket(section_label, index_order):
+    norm_label = normalize_text(section_label)
+    if "LIBERAC" in norm_label:
+        return "sugestao_liberacao"
+    if "CADASTR" in norm_label:
+        return "oportunidade_cadastro"
+    if index_order == 0:
+        return "oportunidade_cadastro"
+    return "sugestao_liberacao"
+
+
+def parse_oportunidades_cadastros_liberacoes(rows_raw, header, sheet_name, form_index):
+    oportunidades_rows = []
+    sugestao_rows = []
+
+    header_rows = find_table_header_rows(rows_raw, CADASTROS_HEADERS)
+    if not header_rows:
+        return oportunidades_rows, sugestao_rows
+
+    normalized_header_labels = {normalize_text(k) for k in CADASTROS_HEADERS.keys()}
+
+    for order, header_row_idx in enumerate(header_rows):
+        end_idx = len(rows_raw)
+        if order < len(header_rows) - 1:
+            end_idx = header_rows[order + 1]
+
+        section_label = ""
+        for back_idx in range(header_row_idx - 1, -1, -1):
+            values = [clean_scalar_text(c["value"]) for c in rows_raw[back_idx]["cells"]]
+            values = [v for v in values if v]
+
+            if not values:
+                continue
+
+            if len(values) == 1:
+                candidate = values[0].rstrip(":").strip()
+                if normalize_text(candidate) not in normalized_header_labels:
+                    section_label = candidate
+                    break
+
+            if len(values) > 1:
+                break
+
+        tipo_registro = infer_section_bucket(section_label, order)
+        parsed_rows = parse_grid_table(
+            rows_raw[header_row_idx:end_idx],
+            header,
+            sheet_name,
+            form_index,
+            tipo_registro,
+            CADASTROS_HEADERS
+        )
+
+        if section_label:
+            for item in parsed_rows:
+                item["secao_interna"] = section_label
+                item["categoria_secao"] = categorize_section_label(section_label)
+
+        if tipo_registro == "sugestao_liberacao":
+            sugestao_rows.extend(parsed_rows)
+        else:
+            oportunidades_rows.extend(parsed_rows)
+
+    return oportunidades_rows, sugestao_rows
+
+
+def normalize_detected_block_name(block_name, label_found):
+    if block_name == "encartes_obrigatorios":
+        return detect_encartes_block_name(label_found)
+    return block_name
+
+
+def split_premissas_from_result(result):
+    descricao_rows = result.get("descricao_investimento_rows", [])
+    investimentos_rows = result.get("investimentos_extras_rows", [])
+
+    descricao_main, descricao_premissas = split_rows_from_marker(descricao_rows, "PREMISSAS GERAIS")
+    investimentos_main, investimentos_premissas = split_rows_from_marker(investimentos_rows, "PREMISSAS GERAIS")
+
+    premissas_rows = descricao_premissas + investimentos_premissas
+    if not premissas_rows:
+        return
+
+    result["descricao_investimento_rows"] = descricao_main
+    result["investimentos_extras_rows"] = investimentos_main
+    result["premissas_gerais_rows"] = premissas_rows
+
+    if "premissas_gerais" not in result["identified_blocks"]:
+        result["identified_blocks"].append("premissas_gerais")
 
 
 def process_form_grid(grid, sheet_name, form_index, region_meta):
@@ -1018,7 +1401,7 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
         "region_start_col": region_meta["start_col"] + 1,
         "region_end_col": region_meta["end_col"] + 1,
         "region_width": region_meta["width"],
-        "identified_blocks": [h["block"] for h in headers_found],
+        "identified_blocks": [normalize_detected_block_name(h["block"], h["label_found"]) for h in headers_found],
         "header": {
             "cliente": None,
             "periodo_original": None,
@@ -1037,49 +1420,95 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
         "plano_negocios_rows": [],
         "historico_rows": [],
         "objetivos_rows": [],
+        "objetivos_compactos_rows": [],
         "descricao_investimento_rows": [],
+        "descricao_investimento_compacto_rows": [],
+        "premissas_gerais_rows": [],
         "contrapartidas_rows": [],
         "contrapartidas_itens_foco_rows": [],
+        "contrapartidas_acoes_rows": [],
         "encartes_obrigatorios_rows": [],
+        "encartes_sugestao_rows": [],
         "cadastros_vinculados_rows": [],
         "situacao_liberacao_rows": [],
+        "oportunidades_cadastros_rows": [],
+        "sugestao_liberacao_rows": [],
         "investimentos_extras_rows": [],
+        "stok_objetivo_compra_rows": [],
         "raw_blocks": []
     }
 
     for block_info in ranges:
+        effective_block = normalize_detected_block_name(block_info["block"], block_info["label_found"])
         rows_raw = slice_block_rows(grid, block_info)
         title_year = extract_year_from_title(block_info["label_found"])
 
         result["raw_blocks"].append({
-            "block": block_info["block"],
+            "block": effective_block,
             "label_found": clean_scalar_text(block_info["label_found"]),
             "start_row": block_info["start_row"] + 1,
             "end_row": block_info["end_row"] + 1,
             "total_rows_raw": len(rows_raw)
         })
 
-        if block_info["block"] == "plano_negocios":
+        if effective_block == "plano_negocios":
             result["header"] = extract_header_from_block(rows_raw, block_info["label_found"])
             result["plano_negocios_rows"] = [remove_empty_fields(build_context(result["header"], sheet_name, form_index))]
 
-        elif block_info["block"] == "historico":
+        elif effective_block == "historico":
             result["historico_rows"].extend(
                 parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "historico", title_year)
             )
 
-        elif block_info["block"] == "objetivos":
-            result["objetivos_rows"].extend(
-                parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "objetivo", title_year)
+        elif effective_block == "objetivos":
+            objetivos_compactos_rows = parse_compact_side_pairs(
+                rows_raw,
+                result["header"],
+                sheet_name,
+                form_index,
+                "objetivo_compacto",
+                title_year,
+                ignored_titles=["OBJETIVOS PARA O INVESTIMENTO", "OBJETIVOS", block_info["label_found"]]
             )
+            if objetivos_compactos_rows:
+                result["objetivos_compactos_rows"].extend(objetivos_compactos_rows)
+                if "objetivos_compactos" not in result["identified_blocks"]:
+                    result["identified_blocks"].append("objetivos_compactos")
 
-        elif block_info["block"] == "descricao_investimento":
+            objetivos_table_rows = parse_objectives_table(
+                rows_raw,
+                result["header"],
+                sheet_name,
+                form_index,
+                title_year
+            )
+            if objetivos_table_rows:
+                result["objetivos_rows"].extend(objetivos_table_rows)
+            else:
+                result["objetivos_rows"].extend(
+                    parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "objetivo", title_year)
+                )
+
+        elif effective_block == "descricao_investimento":
             result["descricao_investimento_rows"].extend(
                 parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "descricao_investimento", None)
             )
+            descricao_compacta_rows = parse_compact_side_pairs(
+                rows_raw,
+                result["header"],
+                sheet_name,
+                form_index,
+                "descricao_investimento_compacto",
+                None,
+                ignored_titles=["DESCRIÇÃO DO INVESTIMENTO", "DESCRICAO DO INVESTIMENTO", block_info["label_found"]]
+            )
+            if descricao_compacta_rows:
+                result["descricao_investimento_compacto_rows"].extend(descricao_compacta_rows)
+                if "descricao_investimento_compacto" not in result["identified_blocks"]:
+                    result["identified_blocks"].append("descricao_investimento_compacto")
 
-        elif block_info["block"] == "contrapartidas":
-            contrapartidas_only_rows, encartes_embedded_rows = split_contrapartidas_and_encartes(rows_raw)
+        elif effective_block == "contrapartidas":
+            contrapartidas_only_rows, encartes_embedded_rows, encartes_block_name = split_contrapartidas_and_encartes(rows_raw)
 
             result["contrapartidas_rows"].extend(
                 parse_grid_table(
@@ -1093,19 +1522,15 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
             )
 
             if encartes_embedded_rows:
-                result["encartes_obrigatorios_rows"].extend(
-                    parse_month_grid(
-                        encartes_embedded_rows,
-                        result["header"],
-                        sheet_name,
-                        form_index
-                    )
+                encartes_key = "encartes_sugestao_rows" if encartes_block_name == "encartes_sugestao" else "encartes_obrigatorios_rows"
+                result[encartes_key].extend(
+                    parse_month_grid(encartes_embedded_rows, result["header"], sheet_name, form_index)
                 )
 
-                if "encartes_obrigatorios" not in result["identified_blocks"]:
-                    result["identified_blocks"].append("encartes_obrigatorios")
+                if encartes_block_name and encartes_block_name not in result["identified_blocks"]:
+                    result["identified_blocks"].append(encartes_block_name)
 
-        elif block_info["block"] == "contrapartidas_itens_foco":
+        elif effective_block == "contrapartidas_itens_foco":
             result["contrapartidas_itens_foco_rows"].extend(
                 parse_grid_table(
                     rows_raw,
@@ -1117,12 +1542,40 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
                 )
             )
 
-        elif block_info["block"] == "encartes_obrigatorios":
+        elif effective_block == "contrapartidas_acoes":
+            contrapartidas_only_rows, encartes_embedded_rows, encartes_block_name = split_contrapartidas_and_encartes(rows_raw)
+
+            result["contrapartidas_acoes_rows"].extend(
+                parse_grid_table(
+                    contrapartidas_only_rows,
+                    result["header"],
+                    sheet_name,
+                    form_index,
+                    "contrapartida_acao",
+                    CONTRAPARTIDAS_HEADERS
+                )
+            )
+
+            if encartes_embedded_rows:
+                encartes_key = "encartes_sugestao_rows" if encartes_block_name == "encartes_sugestao" else "encartes_obrigatorios_rows"
+                result[encartes_key].extend(
+                    parse_month_grid(encartes_embedded_rows, result["header"], sheet_name, form_index)
+                )
+
+                if encartes_block_name and encartes_block_name not in result["identified_blocks"]:
+                    result["identified_blocks"].append(encartes_block_name)
+
+        elif effective_block == "encartes_obrigatorios":
             result["encartes_obrigatorios_rows"].extend(
                 parse_month_grid(rows_raw, result["header"], sheet_name, form_index)
             )
 
-        elif block_info["block"] == "cadastros_vinculados":
+        elif effective_block == "encartes_sugestao":
+            result["encartes_sugestao_rows"].extend(
+                parse_month_grid(rows_raw, result["header"], sheet_name, form_index)
+            )
+
+        elif effective_block == "cadastros_vinculados":
             result["cadastros_vinculados_rows"].extend(
                 parse_grid_table(
                     rows_raw,
@@ -1135,7 +1588,17 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
                 )
             )
 
-        elif block_info["block"] == "situacao_liberacao":
+        elif effective_block == "oportunidades_cadastros_liberacoes":
+            oportunidades_rows, sugestao_rows = parse_oportunidades_cadastros_liberacoes(
+                rows_raw,
+                result["header"],
+                sheet_name,
+                form_index
+            )
+            result["oportunidades_cadastros_rows"].extend(oportunidades_rows)
+            result["sugestao_liberacao_rows"].extend(sugestao_rows)
+
+        elif effective_block == "situacao_liberacao":
             result["situacao_liberacao_rows"].extend(
                 parse_grid_table(
                     rows_raw,
@@ -1148,17 +1611,107 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
                 )
             )
 
-        elif block_info["block"] == "investimentos_extras":
+        elif effective_block == "investimentos_extras":
             result["investimentos_extras_rows"].extend(
                 parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "investimento_extra", None)
             )
+            stok_rows = parse_stok_objetivo_compra_table(
+                rows_raw,
+                result["header"],
+                sheet_name,
+                form_index
+            )
+            if stok_rows:
+                result["stok_objetivo_compra_rows"].extend(stok_rows)
+                if "stok_objetivo_compra" not in result["identified_blocks"]:
+                    result["identified_blocks"].append("stok_objetivo_compra")
 
     if not result["plano_negocios_rows"]:
         result["plano_negocios_rows"] = [remove_empty_fields(build_context(result["header"], sheet_name, form_index))]
 
+    split_premissas_from_result(result)
     result["header"] = remove_empty_fields(result["header"])
     result["identified_blocks"] = list(dict.fromkeys(result["identified_blocks"]))
     return remove_empty_fields(result)
+
+
+def build_manual_compact_record(form, sheet_name, row_excel, descricao, valor, tipo_registro, observacao=None, lado_layout="direita"):
+    item = {
+        **build_context(form.get("header", {}), sheet_name, form.get("formulario_index")),
+        "tipo_registro": tipo_registro,
+        "lado_layout": lado_layout,
+        "descricao": clean_scalar_text(descricao),
+        "valor_original": clean_scalar_text(valor),
+        "valor_numerico": parse_number(valor),
+        "unidade": detect_unit(f"{descricao} {valor}"),
+        "row_excel": row_excel,
+        "linha_original": " | ".join(x for x in [clean_scalar_text(descricao), clean_scalar_text(valor), clean_scalar_text(observacao)] if x),
+    }
+    if observacao:
+        item["observacao"] = clean_scalar_text(observacao)
+    return remove_empty_fields(item)
+
+
+def append_unique_rows(target_rows, new_rows):
+    existing = {
+        (
+            row.get("tipo_registro"),
+            row.get("descricao"),
+            row.get("valor_original"),
+            row.get("observacao"),
+        )
+        for row in target_rows
+    }
+
+    for row in new_rows:
+        key = (
+            row.get("tipo_registro"),
+            row.get("descricao"),
+            row.get("valor_original"),
+            row.get("observacao"),
+        )
+        if key not in existing:
+            row["linha_ordem"] = len(target_rows) + 1
+            target_rows.append(row)
+            existing.add(key)
+
+
+def enrich_bonato_second_form(ws, forms):
+    if ws.title != "BONATO":
+        return
+
+    for form in forms:
+        if form.get("formulario_index") != 2:
+            continue
+
+        objetivos_rows = [
+            build_manual_compact_record(form, ws.title, 16, "OBJETIVO DE VOLUME/MÊS (CAIXAS):", ws.cell(16, 42).value, "objetivo_compacto"),
+            build_manual_compact_record(form, ws.title, 19, "OBJETIVO DE VOLUME/TOTAL DO PERÍODO (CAIXAS):", ws.cell(19, 42).value, "objetivo_compacto"),
+            build_manual_compact_record(form, ws.title, 22, "MODALIDADE DE CARREGAMENTO:", ws.cell(22, 42).value, "objetivo_compacto"),
+        ]
+        objetivos_rows = [row for row in objetivos_rows if row.get("valor_original")]
+        if objetivos_rows:
+            append_unique_rows(form.setdefault("objetivos_compactos_rows", []), objetivos_rows)
+            if "objetivos_compactos" not in form.setdefault("identified_blocks", []):
+                form["identified_blocks"].append("objetivos_compactos")
+
+        descricao_rows = [
+            build_manual_compact_record(form, ws.title, 27, "VALOR DE INVESTIMENTO:", ws.cell(27, 42).value, "descricao_investimento_compacto"),
+            build_manual_compact_record(
+                form,
+                ws.title,
+                30,
+                "FORMA DE PAGAMENTO:",
+                ws.cell(30, 42).value,
+                "descricao_investimento_compacto",
+                observacao=ws.cell(30, 47).value,
+            ),
+        ]
+        descricao_rows = [row for row in descricao_rows if row.get("valor_original")]
+        if descricao_rows:
+            append_unique_rows(form.setdefault("descricao_investimento_compacto_rows", []), descricao_rows)
+            if "descricao_investimento_compacto" not in form.setdefault("identified_blocks", []):
+                form["identified_blocks"].append("descricao_investimento_compacto")
 
 
 def process_sheet(ws):
@@ -1191,6 +1744,7 @@ def process_sheet(ws):
                 "motivo": "regiao_sem_blocos_principais"
             })
 
+    enrich_bonato_second_form(ws, forms)
     return remove_empty_fields({
         "sheet_name": ws.title,
         "forms": forms,
