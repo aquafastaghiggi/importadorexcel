@@ -89,6 +89,7 @@ function format_percent_br($value): string
         return '';
     }
 
+    // Se já veio como texto com %
     if (strpos((string)$value, '%') !== false) {
         return (string)$value;
     }
@@ -109,6 +110,7 @@ function format_percent_br($value): string
         return (string)$value;
     }
 
+    // Se for decimal (0.034 → 3.4%)
     if ($num <= 1) {
         $num = $num * 100;
     }
@@ -244,38 +246,6 @@ function render_key_value_table(array $data, string $titulo): void
     echo '</div>';
 }
 
-function render_definition_list_block(array $rows, string $titulo, array $valuePercentColumns = []): void
-{
-    if (empty($rows)) {
-        return;
-    }
-
-    echo '<div class="bloco-card">';
-    echo '<h3>' . e($titulo) . '</h3>';
-    echo '<div class="definition-list">';
-
-    foreach ($rows as $row) {
-        $descricao = trim((string)($row['descricao'] ?? ''));
-        $valor = $row['valor_original'] ?? '';
-
-        if ($descricao === '' && ($valor === '' || $valor === null)) {
-            continue;
-        }
-
-        if (in_array('valor_original', $valuePercentColumns, true) && $valor !== '' && $valor !== null) {
-            $valor = format_percent_br($valor);
-        }
-
-        echo '<div class="definition-item">';
-        echo '<div class="definition-label">' . e($descricao) . '</div>';
-        echo '<div class="definition-value">' . e((string)$valor) . '</div>';
-        echo '</div>';
-    }
-
-    echo '</div>';
-    echo '</div>';
-}
-
 function render_block_summary(array $rawBlocks): void
 {
     if (empty($rawBlocks)) {
@@ -321,7 +291,6 @@ function block_meta(string $blockKey): array
         'contrapartidas_itens_foco_rows' => ['label' => 'Contrapartidas - Itens foco', 'icon' => '📦'],
         'encartes_obrigatorios_rows' => ['label' => 'Encartes obrigatórios / Sugestão de encartes', 'icon' => '🗓️'],
         'cadastros_vinculados_rows' => ['label' => 'Cadastros vinculados', 'icon' => '🧾'],
-        'situacao_liberacao_rows' => ['label' => 'Situação liberação', 'icon' => '🧾'],
         'investimentos_extras_rows' => ['label' => 'Investimentos extras', 'icon' => '➕'],
         'raw_blocks' => ['label' => 'Blocos detectados', 'icon' => '🔎'],
         'resumo_analitico' => ['label' => 'Resumo analítico', 'icon' => '📊'],
@@ -364,7 +333,6 @@ function get_available_blocks(array $form): array
         'contrapartidas_itens_foco_rows',
         'encartes_obrigatorios_rows',
         'cadastros_vinculados_rows',
-        'situacao_liberacao_rows',
         'investimentos_extras_rows',
         'resumo_analitico',
         'raw_blocks',
@@ -679,10 +647,6 @@ function build_client_summary(array $form): array
             }
         }
 
-        if ($summary['objetivo_ano_SEGUINTE_caixas'] ?? false) {
-            // no-op guard for legacy typo resilience
-        }
-
         if ($summary['objetivo_ano_seguinte_caixas'] === null) {
             $isCaixaObjetivo =
                 (
@@ -809,8 +773,7 @@ function render_client_summary(array $form): void
     echo '<li><strong>Caixas:</strong> tenta identificar descrições com volume, caixas ou CX, inclusive variações novas.</li>';
     echo '<li><strong>Contrapartidas:</strong> são apresentadas de forma desagrupada, linha a linha, preservando a quantidade por ação.</li>';
     echo '<li><strong>Encartes obrigatórios / Sugestão de encartes:</strong> o parser lê múltiplas grades mensais dentro do mesmo bloco.</li>';
-    echo '<li><strong>Cadastros vinculados:</strong> exibem também a seção interna, como CADASTRO, LIBERAÇÃO PARA TODAS AS LOJAS e RETIRAR OS CADASTROS.</li>';
-    echo '<li><strong>Situação liberação:</strong> agora aparece como bloco próprio quando existir na planilha.</li>';
+    echo '<li><strong>Quebras de linha:</strong> campos escalares são limpos para reduzir ruído sem perder listas reais de produtos e encartes.</li>';
     echo '</ul>';
     echo '</div>';
 }
@@ -821,8 +784,13 @@ function render_client_summary(array $form): void
     <meta charset="UTF-8">
     <title>Importador de Excel - Navegação por Formulários e Blocos</title>
     <style>
-        * { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
 
         body {
             font-family: Arial, sans-serif;
@@ -841,9 +809,14 @@ function render_client_summary(array $form): void
             box-shadow: 0 2px 14px rgba(0, 0, 0, 0.08);
         }
 
-        h1, h2, h3, h4 { margin-top: 0; }
+        h1, h2, h3, h4 {
+            margin-top: 0;
+        }
 
-        .muted { color: #5b6470; font-size: 14px; }
+        .muted {
+            color: #5b6470;
+            font-size: 14px;
+        }
 
         .erro {
             background: #ffe8e8;
@@ -861,9 +834,7 @@ function render_client_summary(array $form): void
             margin-bottom: 20px;
         }
 
-        .summary-card,
-        .client-search-card,
-        .bloco-card {
+        .summary-card {
             background: #f7f9fc;
             border: 1px solid #dfe7f1;
             border-radius: 10px;
@@ -890,7 +861,17 @@ function render_client_summary(array $form): void
             padding-left: 18px;
         }
 
-        .summary-list li { margin-bottom: 8px; }
+        .summary-list li {
+            margin-bottom: 8px;
+        }
+
+        .client-search-card {
+            background: #f7f9fc;
+            border: 1px solid #dfe7f1;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
 
         .client-search-row {
             display: flex;
@@ -899,19 +880,41 @@ function render_client_summary(array $form): void
             flex-wrap: wrap;
         }
 
-        .client-search-row input[type="text"],
-        .client-search-row select {
+        .client-search-row input[type="text"] {
+            min-width: 280px;
+            max-width: 100%;
             padding: 10px 12px;
             border: 1px solid #cdd8e5;
             border-radius: 8px;
             background: #fff;
         }
 
-        .client-search-row input[type="text"] { min-width: 280px; }
-        .client-search-row select { min-width: 420px; }
+        .client-search-row select {
+            min-width: 420px;
+            max-width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cdd8e5;
+            border-radius: 8px;
+            background: #fff;
+        }
 
-        form { margin-bottom: 20px; }
-        input[type="file"] { padding: 8px; }
+        .client-search-row button {
+            padding: 10px 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background: #0f3b66;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            padding: 8px;
+        }
 
         button {
             padding: 10px 18px;
@@ -923,7 +926,9 @@ function render_client_summary(array $form): void
             font-weight: bold;
         }
 
-        button:hover { background: #0c3256; }
+        button:hover {
+            background: #0c3256;
+        }
 
         .sheet-card {
             border: 1px solid #d9e3ee;
@@ -931,6 +936,10 @@ function render_client_summary(array $form): void
             padding: 18px;
             margin-top: 24px;
             background: #fcfdff;
+        }
+
+        .sheet-title {
+            margin-bottom: 12px;
         }
 
         .sheet-info {
@@ -1005,6 +1014,11 @@ function render_client_summary(array $form): void
             top: 18px;
         }
 
+        .sidebar h3 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
         .nav-blocks {
             display: flex;
             flex-direction: column;
@@ -1054,9 +1068,21 @@ function render_client_summary(array $form): void
             border-bottom: 2px solid #e6edf5;
         }
 
-        .section-header .icon { font-size: 20px; }
+        .section-header .icon {
+            font-size: 20px;
+        }
 
-        .table-wrap { overflow-x: auto; }
+        .bloco-card {
+            background: #f7f9fc;
+            border: 1px solid #dfe7f1;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
 
         table {
             width: 100%;
@@ -1075,38 +1101,8 @@ function render_client_summary(array $form): void
             white-space: nowrap;
         }
 
-        table th { background: #eef3f9; }
-
-        .definition-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 6px;
-        }
-
-        .definition-item {
-            display: grid;
-            grid-template-columns: minmax(260px, 1fr) minmax(120px, 220px);
-            gap: 18px;
-            align-items: center;
-            padding: 12px 14px;
-            background: #ffffff;
-            border: 1px solid #d7dee8;
-            border-radius: 10px;
-        }
-
-        .definition-label {
-            font-weight: 600;
-            color: #263645;
-            line-height: 1.35;
-        }
-
-        .definition-value {
-            text-align: right;
-            font-weight: 700;
-            color: #102a43;
-            line-height: 1.35;
-            word-break: break-word;
+        table th {
+            background: #eef3f9;
         }
 
         .back-top {
@@ -1117,19 +1113,26 @@ function render_client_summary(array $form): void
             color: #0f3b66;
         }
 
+        .sheet-anchor,
+        .form-anchor {
+            scroll-margin-top: 24px;
+        }
+
         @media (max-width: 1150px) {
-            .sheet-layout { flex-direction: column; }
+            .sheet-layout {
+                flex-direction: column;
+            }
+
             .sidebar {
                 width: 100%;
                 min-width: 100%;
                 position: static;
             }
+
             .client-search-row input[type="text"],
             .client-search-row select {
                 min-width: 100%;
             }
-            .definition-item { grid-template-columns: 1fr; }
-            .definition-value { text-align: left; }
         }
     </style>
 </head>
@@ -1137,7 +1140,7 @@ function render_client_summary(array $form): void
 <div class="container">
     <h1>Importador de Excel - Navegação por Formulários e Blocos</h1>
     <p class="muted">
-        Esta versão mantém o layout limpo da descrição do investimento e acrescenta o bloco Situação liberação como seção própria.
+        Esta versão ajusta a visualização dos blocos para reduzir poluição visual e mantém a navegação por cliente com digitação.
     </p>
 
     <form method="post" enctype="multipart/form-data">
@@ -1186,174 +1189,172 @@ function render_client_summary(array $form): void
             </div>
         </div>
 
-        <?php foreach (($resultado['sheets'] ?? []) as $sheetIndex => $sheet): ?>
-            <?php $sheetSlug = 'sheet_' . $sheetIndex; ?>
-            <div class="sheet-card" id="<?= e($sheetSlug) ?>">
-                <h2>Aba: <?= e($sheet['sheet_name'] ?? '') ?></h2>
+        <?php if (!empty($resultado['sheets'])): ?>
+            <?php foreach ($resultado['sheets'] as $sheetIndex => $sheet): ?>
+                <?php $sheetSlug = 'sheet_' . $sheetIndex; ?>
+                <div class="sheet-card sheet-anchor" id="<?= e($sheetSlug) ?>">
+                    <div class="sheet-title">
+                        <h2>Aba: <?= e($sheet['sheet_name'] ?? '') ?></h2>
+                    </div>
 
-                <?php
-                $forms = $sheet['forms'] ?? [];
-                $ignoredRegions = $sheet['ignored_regions'] ?? [];
-                ?>
+                    <?php
+                    $forms = $sheet['forms'] ?? [];
+                    $ignoredRegions = $sheet['ignored_regions'] ?? [];
+                    ?>
 
-                <div class="sheet-info">
-                    <span class="chip">formulários detectados: <?= e(count($forms)) ?></span>
+                    <div class="sheet-info">
+                        <span class="chip">formulários detectados: <?= e(count($forms)) ?></span>
+                        <?php if (!empty($ignoredRegions)): ?>
+                            <span class="chip">regiões ignoradas: <?= e(count($ignoredRegions)) ?></span>
+                        <?php endif; ?>
+                    </div>
+
                     <?php if (!empty($ignoredRegions)): ?>
-                        <span class="chip">regiões ignoradas: <?= e(count($ignoredRegions)) ?></span>
+                        <?php render_ignored_regions($ignoredRegions); ?>
                     <?php endif; ?>
-                </div>
 
-                <?php if (!empty($ignoredRegions)): ?>
-                    <?php render_ignored_regions($ignoredRegions); ?>
-                <?php endif; ?>
-
-                <?php if (!empty($forms)): ?>
-                    <?php foreach ($forms as $formIndex => $form): ?>
-                        <?php
-                        $availableBlocks = get_available_blocks($form);
-                        $formSlug = $sheetSlug . '_form_' . ($form['formulario_index'] ?? ($formIndex + 1));
-                        $clienteForm = trim((string)($form['header']['cliente'] ?? ''));
-                        ?>
-                        <div class="form-card" id="<?= e($formSlug) ?>">
-                            <div class="form-title">
-                                <h3>Formulário <?= e($form['formulario_index'] ?? ($formIndex + 1)) ?></h3>
-                                <div class="form-badges">
-                                    <?php if (!empty($clienteForm)): ?>
-                                        <span class="badge">cliente: <?= e($clienteForm) ?></span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($form['header']['titulo_plano'])): ?>
-                                        <span class="badge">tipo: <?= e($form['header']['titulo_plano']) ?></span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($form['identified_blocks'])): ?>
-                                        <span class="badge">blocos: <?= e(count($form['identified_blocks'])) ?></span>
-                                    <?php endif; ?>
+                    <?php if (!empty($forms)): ?>
+                        <?php foreach ($forms as $formIndex => $form): ?>
+                            <?php
+                            $availableBlocks = get_available_blocks($form);
+                            $formSlug = $sheetSlug . '_form_' . ($form['formulario_index'] ?? ($formIndex + 1));
+                            $clienteForm = trim((string)($form['header']['cliente'] ?? ''));
+                            ?>
+                            <div class="form-card form-anchor" id="<?= e($formSlug) ?>" data-client="<?= e($clienteForm) ?>">
+                                <div class="form-title">
+                                    <h3>Formulário <?= e($form['formulario_index'] ?? ($formIndex + 1)) ?></h3>
+                                    <div class="form-badges">
+                                        <?php if (!empty($clienteForm)): ?>
+                                            <span class="badge">cliente: <?= e($clienteForm) ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($form['header']['titulo_plano'])): ?>
+                                            <span class="badge">tipo: <?= e($form['header']['titulo_plano']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($form['identified_blocks'])): ?>
+                                            <span class="badge">blocos: <?= e(count($form['identified_blocks'])) ?></span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <?php if (!empty($form['identified_blocks'])): ?>
-                                <div class="sheet-info">
-                                    <?php foreach ($form['identified_blocks'] as $identified): ?>
-                                        <span class="chip"><?= e($identified) ?></span>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
+                                <?php if (!empty($form['identified_blocks'])): ?>
+                                    <div class="sheet-info">
+                                        <?php foreach ($form['identified_blocks'] as $identified): ?>
+                                            <span class="chip"><?= e($identified) ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
 
-                            <div class="sheet-layout">
-                                <aside class="sidebar">
-                                    <h3>Navegação do formulário</h3>
-                                    <div class="nav-blocks">
+                                <div class="sheet-layout">
+                                    <aside class="sidebar">
+                                        <h3>Navegação do formulário</h3>
+                                        <div class="nav-blocks">
+                                            <?php foreach ($availableBlocks as $blockKey): ?>
+                                                <?php
+                                                $meta = block_meta($blockKey);
+                                                $targetId = $formSlug . '_' . $blockKey;
+                                                $countLabel = '';
+
+                                                if ($blockKey !== 'header' && $blockKey !== 'resumo_analitico') {
+                                                    $count = is_array($form[$blockKey] ?? null) ? count($form[$blockKey]) : 0;
+                                                    $countLabel = $count . ' registro(s)';
+                                                } elseif ($blockKey === 'resumo_analitico') {
+                                                    $countLabel = 'visão consolidada';
+                                                } else {
+                                                    $countLabel = 'campos do cabeçalho';
+                                                }
+                                                ?>
+                                                <a class="nav-link" href="#<?= e($targetId) ?>">
+                                                    <?= e($meta['icon']) ?> <?= e($meta['label']) ?>
+                                                    <small><?= e($countLabel) ?></small>
+                                                </a>
+                                            <?php endforeach; ?>
+
+                                            <a class="nav-link" href="#<?= e($sheetSlug) ?>">
+                                                ⬆ Voltar à aba
+                                                <small><?= e($sheet['sheet_name'] ?? '') ?></small>
+                                            </a>
+
+                                            <a class="nav-link" href="#topo">
+                                                ⬆ Voltar ao topo
+                                                <small>resumo geral</small>
+                                            </a>
+                                        </div>
+                                    </aside>
+
+                                    <div class="content-area">
                                         <?php foreach ($availableBlocks as $blockKey): ?>
                                             <?php
                                             $meta = block_meta($blockKey);
                                             $targetId = $formSlug . '_' . $blockKey;
-                                            $countLabel = ($blockKey === 'header' || $blockKey === 'resumo_analitico')
-                                                ? ($blockKey === 'header' ? 'campos do cabeçalho' : 'visão consolidada')
-                                                : ((is_array($form[$blockKey] ?? null) ? count($form[$blockKey]) : 0) . ' registro(s)');
                                             ?>
-                                            <a class="nav-link" href="#<?= e($targetId) ?>">
-                                                <?= e($meta['icon']) ?> <?= e($meta['label']) ?>
-                                                <small><?= e($countLabel) ?></small>
-                                            </a>
+                                            <section class="section-block" id="<?= e($targetId) ?>">
+                                                <div class="section-header">
+                                                    <span class="icon"><?= e($meta['icon']) ?></span>
+                                                    <h3><?= e($meta['label']) ?></h3>
+                                                </div>
+
+                                                <?php if ($blockKey === 'header'): ?>
+                                                    <?php render_key_value_table($form['header'], 'Campos do cabeçalho'); ?>
+
+                                                <?php elseif ($blockKey === 'plano_negocios_rows'): ?>
+                                                    <?php render_assoc_table($form['plano_negocios_rows'], 'Tabela simulada: plano_negocios'); ?>
+
+                                                <?php elseif ($blockKey === 'historico_rows'): ?>
+                                                    <?php render_assoc_table($form['historico_rows'], 'Tabela simulada: historico', 'descricao'); ?>
+
+                                                <?php elseif ($blockKey === 'objetivos_rows'): ?>
+                                                    <?php render_assoc_table($form['objetivos_rows'], 'Tabela simulada: objetivos', 'descricao'); ?>
+
+                                                <?php elseif ($blockKey === 'descricao_investimento_rows'): ?>
+                                                    <?php render_assoc_table($form['descricao_investimento_rows'], 'Tabela simulada: descricao_investimento', null, ['descricao', 'valor_original'], ['valor_original'] ); ?>
+
+                                                <?php elseif ($blockKey === 'contrapartidas_rows'): ?>
+                                                    <?php render_assoc_table($form['contrapartidas_rows'], 'Tabela simulada: contrapartidas', 'linha_original'); ?>
+
+                                                <?php elseif ($blockKey === 'contrapartidas_itens_foco_rows'): ?>
+                                                    <?php render_assoc_table($form['contrapartidas_itens_foco_rows'], 'Tabela simulada: contrapartidas_itens_foco', 'linha_original'); ?>
+
+                                                <?php elseif ($blockKey === 'encartes_obrigatorios_rows'): ?>
+                                                    <?php render_assoc_table($form['encartes_obrigatorios_rows'], 'Tabela simulada: encartes_obrigatorios / sugestao_encartes', 'mes'); ?>
+
+                                                <?php elseif ($blockKey === 'cadastros_vinculados_rows'): ?>
+                                                    <?php render_assoc_table($form['cadastros_vinculados_rows'], 'Tabela simulada: cadastros_vinculados', 'produto'); ?>
+
+                                                <?php elseif ($blockKey === 'investimentos_extras_rows'): ?>
+                                                    <?php render_assoc_table(
+                                                        $form['investimentos_extras_rows'],
+                                                        'Tabela simulada: investimentos_extras',
+                                                        null,
+                                                        ['valor_original'],
+                                                        [],
+                                                        2
+                                                    ); ?>
+
+                                                <?php elseif ($blockKey === 'resumo_analitico'): ?>
+                                                    <?php render_client_summary($form); ?>
+
+                                                <?php elseif ($blockKey === 'raw_blocks'): ?>
+                                                    <?php render_block_summary($form['raw_blocks']); ?>
+                                                <?php endif; ?>
+
+                                                <a class="back-top" href="#<?= e($formSlug) ?>">↑ voltar ao topo do formulário</a>
+                                            </section>
                                         <?php endforeach; ?>
-
-                                        <a class="nav-link" href="#<?= e($sheetSlug) ?>">
-                                            ⬆ Voltar à aba
-                                            <small><?= e($sheet['sheet_name'] ?? '') ?></small>
-                                        </a>
-
-                                        <a class="nav-link" href="#topo">
-                                            ⬆ Voltar ao topo
-                                            <small>resumo geral</small>
-                                        </a>
                                     </div>
-                                </aside>
-
-                                <div class="content-area">
-                                    <?php foreach ($availableBlocks as $blockKey): ?>
-                                        <?php
-                                        $meta = block_meta($blockKey);
-                                        $targetId = $formSlug . '_' . $blockKey;
-                                        ?>
-                                        <section class="section-block" id="<?= e($targetId) ?>">
-                                            <div class="section-header">
-                                                <span class="icon"><?= e($meta['icon']) ?></span>
-                                                <h3><?= e($meta['label']) ?></h3>
-                                            </div>
-
-                                            <?php if ($blockKey === 'header'): ?>
-                                                <?php render_key_value_table($form['header'], 'Campos do cabeçalho'); ?>
-
-                                            <?php elseif ($blockKey === 'plano_negocios_rows'): ?>
-                                                <?php render_assoc_table($form['plano_negocios_rows'], 'Tabela simulada: plano_negocios'); ?>
-
-                                            <?php elseif ($blockKey === 'historico_rows'): ?>
-                                                <?php render_assoc_table($form['historico_rows'], 'Tabela simulada: historico', 'descricao'); ?>
-
-                                            <?php elseif ($blockKey === 'objetivos_rows'): ?>
-                                                <?php render_assoc_table($form['objetivos_rows'], 'Tabela simulada: objetivos', 'descricao'); ?>
-
-                                            <?php elseif ($blockKey === 'descricao_investimento_rows'): ?>
-                                                <?php render_definition_list_block(
-                                                    $form['descricao_investimento_rows'],
-                                                    'Descrição do investimento',
-                                                    ['valor_original']
-                                                ); ?>
-
-                                            <?php elseif ($blockKey === 'contrapartidas_rows'): ?>
-                                                <?php render_assoc_table($form['contrapartidas_rows'], 'Tabela simulada: contrapartidas', 'linha_original'); ?>
-
-                                            <?php elseif ($blockKey === 'contrapartidas_itens_foco_rows'): ?>
-                                                <?php render_assoc_table($form['contrapartidas_itens_foco_rows'], 'Tabela simulada: contrapartidas_itens_foco', 'linha_original'); ?>
-
-                                            <?php elseif ($blockKey === 'encartes_obrigatorios_rows'): ?>
-                                                <?php render_assoc_table($form['encartes_obrigatorios_rows'], 'Tabela simulada: encartes_obrigatorios / sugestao_encartes', 'mes'); ?>
-
-                                            <?php elseif ($blockKey === 'cadastros_vinculados_rows'): ?>
-                                                <?php render_assoc_table(
-                                                    $form['cadastros_vinculados_rows'],
-                                                    'Tabela simulada: cadastros_vinculados',
-                                                    'tipo_registro'
-                                                ); ?>
-
-                                            <?php elseif ($blockKey === 'situacao_liberacao_rows'): ?>
-                                                <?php render_assoc_table(
-                                                    $form['situacao_liberacao_rows'],
-                                                    'Tabela simulada: situacao_liberacao',
-                                                    'tipo_registro'
-                                                ); ?>
-
-                                            <?php elseif ($blockKey === 'investimentos_extras_rows'): ?>
-                                                <?php render_assoc_table(
-                                                    $form['investimentos_extras_rows'],
-                                                    'Tabela simulada: investimentos_extras',
-                                                    null,
-                                                    ['valor_original'],
-                                                    [],
-                                                    2
-                                                ); ?>
-
-                                            <?php elseif ($blockKey === 'resumo_analitico'): ?>
-                                                <?php render_client_summary($form); ?>
-
-                                            <?php elseif ($blockKey === 'raw_blocks'): ?>
-                                                <?php render_block_summary($form['raw_blocks']); ?>
-                                            <?php endif; ?>
-
-                                            <a class="back-top" href="#<?= e($formSlug) ?>">↑ voltar ao topo do formulário</a>
-                                        </section>
-                                    <?php endforeach; ?>
                                 </div>
                             </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="bloco-card">
+                            <h3>Nenhum formulário detectado nesta aba</h3>
+                            <p class="muted">
+                                Esta aba não apresentou blocos principais suficientes para ser considerada um formulário válido.
+                            </p>
                         </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="bloco-card">
-                        <h3>Nenhum formulário detectado nesta aba</h3>
-                        <p class="muted">Esta aba não apresentou blocos principais suficientes para ser considerada um formulário válido.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 

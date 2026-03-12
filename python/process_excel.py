@@ -55,6 +55,14 @@ MAIN_BLOCK_ALIASES = {
         "CADASTROS VINCULADOS | LIBERACOES",
         "CADASTROS VINCULADOS | LIBERAÇÕES",
     ],
+    "situacao_liberacao": [
+    "SUBSTITUICAO | LIBERACAO",
+    "SUBSTITUIÇÃO | LIBERAÇÃO",
+    "SITUACAO LIBERACAO",
+    "SITUAÇÃO LIBERAÇÃO",
+    "SITUACAO DA LIBERACAO",
+    "SITUAÇÃO DA LIBERAÇÃO",
+    ],
     "investimentos_extras": [
         "INVESTIMENTOS EXTRAS",
     ],
@@ -159,15 +167,34 @@ def value_to_str(value):
 
 
 def clean_scalar_text(value):
-    """
-    Para campos escalares: remove quebras internas sem destruir listas.
-    """
     if value is None:
         return ""
     text = str(value).replace("\r", "\n")
     text = re.sub(r"\n+", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def remove_empty_fields(obj):
+    if isinstance(obj, dict):
+        cleaned = {}
+        for k, v in obj.items():
+            vv = remove_empty_fields(v)
+            if vv in ("", None, [], {}):
+                continue
+            cleaned[k] = vv
+        return cleaned
+
+    if isinstance(obj, list):
+        cleaned_list = []
+        for item in obj:
+            vv = remove_empty_fields(item)
+            if vv in ("", None, [], {}):
+                continue
+            cleaned_list.append(vv)
+        return cleaned_list
+
+    return obj
 
 
 def excel_col_letter(col_idx_zero_based):
@@ -496,7 +523,18 @@ def find_block_headers(grid):
                 matched = False
                 for alias in aliases:
                     alias_norm = normalize_text(alias)
-                    if norm == alias_norm or norm.startswith(alias_norm + " |") or norm.startswith(alias_norm + " -"):
+
+                    is_match = norm == alias_norm
+                    if not is_match:
+                        is_match = (
+                            norm.startswith(alias_norm + " |") or
+                            norm.startswith(alias_norm + " -") or
+                            norm.startswith(alias_norm + ":")
+                        )
+                    if not is_match:
+                        is_match = norm.startswith(alias_norm + " ")
+
+                    if is_match:
                         found.append({
                             "block": block_name,
                             "row": r_idx,
@@ -505,6 +543,7 @@ def find_block_headers(grid):
                         })
                         matched = True
                         break
+
                 if matched:
                     break
 
@@ -541,6 +580,7 @@ def is_valid_form_region(headers_found):
         "contrapartidas_itens_foco",
         "encartes_obrigatorios",
         "cadastros_vinculados",
+        "situacao_liberacao",
         "investimentos_extras",
     }
 
@@ -562,7 +602,7 @@ def build_row_ranges(headers, total_rows):
         ranges.append({
             "block": item["block"],
             "label_found": item["label_found"],
-            "start_row": start,
+            "start_row": item["row"],
             "end_row": end,
             "start_col": item["col"]
         })
@@ -703,11 +743,24 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
     for order, row in enumerate(rows_raw, start=1):
         cells = row["cells"]
         joined = row_to_joined(row)
-        if len(cells) < 2:
-            continue
 
-        label = clean_scalar_text(cells[0]["value"])
-        value = clean_scalar_text(cells[-1]["value"])
+        label = ""
+        value = ""
+
+        if len(cells) >= 2:
+            label = clean_scalar_text(cells[0]["value"])
+            value = clean_scalar_text(cells[-1]["value"])
+        elif len(cells) == 1:
+            single = clean_scalar_text(cells[0]["value"])
+            if ":" in single:
+                parts = single.split(":", 1)
+                label = clean_scalar_text(parts[0])
+                value = clean_scalar_text(parts[1])
+            else:
+                label = single
+                value = ""
+        else:
+            continue
 
         norm_label = normalize_text(label)
         if norm_label in {
@@ -719,7 +772,7 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
         }:
             continue
 
-        rows.append({
+        item = {
             **ctx,
             "tipo_registro": tipo_registro,
             "descricao": label,
@@ -730,7 +783,8 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
             "linha_ordem": order,
             "row_excel": row["row_excel"],
             "linha_original": joined
-        })
+        }
+        rows.append(remove_empty_fields(item))
 
     return rows
 
@@ -761,6 +815,7 @@ def build_column_map(header_cells, header_dict):
     return col_map
 
 
+#ajuste aqui ler o bloco sibstituição liberacao
 def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, header_dict, section_rules=False):
     rows = []
     ctx = build_context(header, sheet_name, form_index)
@@ -771,9 +826,27 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
     table_header_cells = rows_raw[header_row_idx]["cells"]
     col_map = build_column_map(table_header_cells, header_dict)
 
-    current_section = None
-    line_order = 0
     normalized_header_labels = set(normalize_text(k) for k in header_dict.keys())
+
+    current_section = None
+
+    # NOVO: tenta localizar uma seção imediatamente acima do cabeçalho
+    if section_rules:
+        for back_idx in range(header_row_idx - 1, -1, -1):
+            back_row = rows_raw[back_idx]
+            back_values = [clean_scalar_text(c["value"]) for c in back_row["cells"]]
+
+            if len(back_values) == 1:
+                candidate = normalize_text(back_values[0]).rstrip(":")
+                if candidate not in normalized_header_labels:
+                    current_section = back_values[0].rstrip(":").strip()
+                    break
+
+            # se encontrou uma linha com várias células, para de procurar acima
+            if len(back_values) > 1:
+                break
+
+    line_order = 0
 
     for idx in range(header_row_idx + 1, len(rows_raw)):
         row = rows_raw[idx]
@@ -781,8 +854,8 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
         norms = [normalize_text(v) for v in values]
 
         if section_rules:
-            if len(values) == 1 and normalize_text(values[0]) not in normalized_header_labels:
-                current_section = values[0]
+            if len(values) == 1 and normalize_text(values[0]).rstrip(":") not in normalized_header_labels:
+                current_section = values[0].rstrip(":").strip()
                 continue
 
         if sum(1 for n in norms if n in normalized_header_labels) >= 2:
@@ -805,8 +878,10 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
             col_idx = cell["col_idx"]
             if col_idx in col_map:
                 field = col_map[col_idx]
-                line_data[field] = clean_scalar_text(cell["value"])
-                filled_count += 1
+                value = clean_scalar_text(cell["value"])
+                if value != "":
+                    line_data[field] = value
+                    filled_count += 1
 
         if filled_count >= 1:
             if "quantidade" in line_data:
@@ -817,10 +892,9 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
                 line_data["volume_periodo_numerica"] = parse_number(line_data.get("volume_periodo"))
             line_order += 1
             line_data["linha_ordem"] = line_order
-            rows.append(line_data)
+            rows.append(remove_empty_fields(line_data))
 
     return rows
-
 
 def find_month_header_sections(rows_raw):
     sections = []
@@ -871,7 +945,7 @@ def parse_month_grid(rows_raw, header, sheet_name, form_index):
 
                 products = split_products_from_cell(cell_value)
                 for prod in products:
-                    rows.append({
+                    item = {
                         **ctx,
                         "tipo_registro": "encarte_obrigatorio",
                         "mes": month_label,
@@ -880,7 +954,8 @@ def parse_month_grid(rows_raw, header, sheet_name, form_index):
                         "linha_visual": global_line_visual + 1,
                         "row_excel": row["row_excel"],
                         "linha_original": row_to_joined(row)
-                    })
+                    }
+                    rows.append(remove_empty_fields(item))
                     added_any = True
 
             if added_any:
@@ -961,6 +1036,7 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
         "contrapartidas_itens_foco_rows": [],
         "encartes_obrigatorios_rows": [],
         "cadastros_vinculados_rows": [],
+        "situacao_liberacao_rows": [],
         "investimentos_extras_rows": [],
         "raw_blocks": []
     }
@@ -979,7 +1055,7 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
 
         if block_info["block"] == "plano_negocios":
             result["header"] = extract_header_from_block(rows_raw, block_info["label_found"])
-            result["plano_negocios_rows"] = [build_context(result["header"], sheet_name, form_index)]
+            result["plano_negocios_rows"] = [remove_empty_fields(build_context(result["header"], sheet_name, form_index))]
 
         elif block_info["block"] == "historico":
             result["historico_rows"].extend(
@@ -1053,16 +1129,30 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
                 )
             )
 
+        elif block_info["block"] == "situacao_liberacao":
+            result["situacao_liberacao_rows"].extend(
+                parse_grid_table(
+                    rows_raw,
+                    result["header"],
+                    sheet_name,
+                    form_index,
+                    "situacao_liberacao",
+                    CADASTROS_HEADERS,
+                    section_rules=True
+                )
+            )
+
         elif block_info["block"] == "investimentos_extras":
             result["investimentos_extras_rows"].extend(
                 parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "investimento_extra", None)
             )
 
     if not result["plano_negocios_rows"]:
-        result["plano_negocios_rows"] = [build_context(result["header"], sheet_name, form_index)]
+        result["plano_negocios_rows"] = [remove_empty_fields(build_context(result["header"], sheet_name, form_index))]
 
+    result["header"] = remove_empty_fields(result["header"])
     result["identified_blocks"] = list(dict.fromkeys(result["identified_blocks"]))
-    return result
+    return remove_empty_fields(result)
 
 
 def process_sheet(ws):
@@ -1095,11 +1185,11 @@ def process_sheet(ws):
                 "motivo": "regiao_sem_blocos_principais"
             })
 
-    return {
+    return remove_empty_fields({
         "sheet_name": ws.title,
         "forms": forms,
         "ignored_regions": ignored_regions
-    }
+    })
 
 
 def main():
@@ -1125,7 +1215,7 @@ def main():
             ws = wb[sheet_name]
             output["sheets"].append(process_sheet(ws))
 
-        print(json.dumps(output, ensure_ascii=False))
+        print(json.dumps(remove_empty_fields(output), ensure_ascii=False))
 
     except Exception as e:
         print(json.dumps({
