@@ -376,7 +376,13 @@ def normalize_period(raw_text):
 
 def worksheet_to_grid(ws):
     grid = []
-    for row in ws.iter_rows():
+    max_col = ws.max_column or 0
+
+    for row_idx, row in enumerate(ws.iter_rows(), start=1):
+        if ws.row_dimensions[row_idx].hidden:
+            grid.append([""] * max_col)
+            continue
+
         grid.append([value_to_str(cell.value) for cell in row])
     return grid
 
