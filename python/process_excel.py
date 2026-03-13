@@ -12,7 +12,7 @@ try:
 except ImportError:
     print(json.dumps({
         "success": False,
-        "error": "Biblioteca openpyxl não instalada. Execute: python -m pip install openpyxl"
+        "error": "Biblioteca openpyxl nÃ£o instalada. Execute: python -m pip install openpyxl"
     }, ensure_ascii=False))
     sys.exit(1)
 
@@ -31,7 +31,7 @@ MAIN_BLOCK_ALIASES = {
     ],
     "descricao_investimento": [
         "DESCRICAO DO INVESTIMENTO",
-        "DESCRIÇÃO DO INVESTIMENTO",
+        "DESCRIÃ‡ÃƒO DO INVESTIMENTO",
     ],
     "contrapartidas_itens_foco": [
         "CONTRAPARTIDAS - ITENS FOCO",
@@ -40,49 +40,76 @@ MAIN_BLOCK_ALIASES = {
     ],
     "contrapartidas_acoes": [
         "CONTRAPARTIDAS - ACOES",
-        "CONTRAPARTIDAS - AÇÕES",
+        "CONTRAPARTIDAS - AÃ‡Ã•ES",
     ],
     "contrapartidas": [
         "CONTRAPARTIDAS",
         "CONTRAPARTIDA",
         "CONTRAPARTIDAS EM FUNCAO DO INVESTIMENTO",
-        "CONTRAPARTIDAS EM FUNÇÃO DO INVESTIMENTO",
+        "CONTRAPARTIDAS EM FUNÃ‡ÃƒO DO INVESTIMENTO",
     ],
     "encartes_sugestao": [
         "ENCARTES SUGESTAO",
-        "ENCARTES SUGESTÃO",
+        "ENCARTES SUGESTÃƒO",
     ],
     "encartes_obrigatorios": [
         "ENCARTES OBRIGATORIOS",
-        "ENCARTES OBRIGATÓRIOS",
+        "ENCARTES OBRIGATÃ“RIOS",
         "SUGESTAO DE ENCARTES",
-        "SUGESTÃO DE ENCARTES",
+        "SUGESTÃƒO DE ENCARTES",
     ],
     "cadastros_vinculados": [
         "CADASTROS VINCULADOS",
         "CADASTROS VINCULADOS | LIBERACOES",
-        "CADASTROS VINCULADOS | LIBERAÇÕES",
+        "CADASTROS VINCULADOS | LIBERAÃ‡Ã•ES",
     ],
     "situacao_liberacao": [
     "SUBSTITUICAO | LIBERACAO",
-    "SUBSTITUIÇÃO | LIBERAÇÃO",
+    "SUBSTITUIÃ‡ÃƒO | LIBERAÃ‡ÃƒO",
     "SITUACAO LIBERACAO",
-    "SITUAÇÃO LIBERAÇÃO",
+    "SITUAÃ‡ÃƒO LIBERAÃ‡ÃƒO",
     "SITUACAO DA LIBERACAO",
-    "SITUAÇÃO DA LIBERAÇÃO",
+    "SITUAÃ‡ÃƒO DA LIBERAÃ‡ÃƒO",
     ],
     "oportunidades_cadastros_liberacoes": [
         "OPORTUNIDADE DE CADASTROS | LIBERACOES",
-        "OPORTUNIDADE DE CADASTROS | LIBERAÇÕES",
+        "OPORTUNIDADE DE CADASTROS | LIBERAÃ‡Ã•ES",
         "OPORTUNIDADES DE CADASTROS | LIBERACOES",
-        "OPORTUNIDADES DE CADASTROS | LIBERAÇÕES",
+        "OPORTUNIDADES DE CADASTROS | LIBERAÃ‡Ã•ES",
         "OPORTUNIDADES DE CADATROS | LIBERACOES",
-        "OPORTUNIDADES DE CADATROS | LIBERAÇÕES",
+        "OPORTUNIDADES DE CADATROS | LIBERAÃ‡Ã•ES",
     ],
     "investimentos_extras": [
         "INVESTIMENTOS EXTRAS",
     ],
 }
+
+AJUSTE_COLUNAR_DESCRICAO_RULES = [
+    {"field": "forma_pagamento", "kind": "text", "contains_all": ["FORMA", "PAGAMENTO"]},
+    {"field": "percentual_investimento_mensal_total", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "MENSAL", "TOTAL"]},
+    {"field": "percentual_investimento_total", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "TOTAL"]},
+    {"field": "percentual_investimento_calendario_acoes", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "CALENDARIO", "ACOES"]},
+    {"field": "percentual_investimento_pontas", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "PONTAS"]},
+    {"field": "percentual_investimento_pedidos", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "PEDIDOS"]},
+    {"field": "percentual_investimento_jbp", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "JBP"]},
+    {"field": "percentual_investimento_objetivo", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "OBJETIVO"]},
+    {"field": "percentual_investimento_volume_global_acoes", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "VOLUME", "GLOBAL", "ACOES"]},
+    {"field": "percentual_investimento_volume_global", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "VOLUME", "GLOBAL"]},
+    {"field": "percentual_investimento_acoes", "kind": "percent", "contains_all": ["PERCENTUAL", "INVESTIMENTO", "ACOES"]},
+    {"field": "valor_investimento_total", "kind": "number", "contains_all": ["VALOR", "INVESTIMENTO", "TOTAL"]},
+    {"field": "valor_investimento_mensal", "kind": "number", "contains_all": ["VALOR", "INVESTIMENTO", "MENSAL"]},
+    {"field": "valor_investimento", "kind": "number", "contains_all": ["VALOR", "INVESTIMENTO"]},
+    {"field": "investimento_mensal_total", "kind": "number", "contains_all": ["INVESTIMENTO", "MENSAL", "TOTAL"]},
+    {"field": "gatilho_adicional_volume_total", "kind": "number", "contains_all": ["GATILHO", "ADICIONAL", "VOLUME", "TOTAL"]},
+    {"field": "crescimento_valor", "kind": "percent", "contains_all": ["CRESCIMENTO", "VALOR"]},
+]
+
+AJUSTE_COLUNAR_EXTRAS_RULES = [
+    {"field": "promotor", "kind": "bool", "contains_all": ["PROMOTOR"]},
+    {"field": "retorno_financeiro", "kind": "bool", "contains_all": ["RETORNO", "FINANCEIRO"]},
+    {"field": "liberacao_dados_scanntech_2025", "kind": "number", "contains_all": ["LIBERACAO", "DADOS", "SCANNTECH", "2025"]},
+    {"field": "adicional_crescimento_categorias", "kind": "text", "contains_all": ["ADICIONAL", "CRESCIMENTO", "CATEGORIAS"]},
+]
 
 FORM_TITLE_ALIASES = [
     "JBP",
@@ -97,30 +124,30 @@ HEADER_LABEL_ALIASES = {
     ],
     "periodo_plano": [
         "PERIODO DO PLANO",
-        "PERÍODO DO PLANO",
+        "PERÃODO DO PLANO",
         "PERIODO DE PAGAMENTO PLANO",
-        "PERÍODO DE PAGAMENTO PLANO",
+        "PERÃODO DE PAGAMENTO PLANO",
     ],
     "periodo_acoes_plano": [
         "PERIODO DE ACOES PLANO",
-        "PERÍODO DE AÇÕES PLANO",
+        "PERÃODO DE AÃ‡Ã•ES PLANO",
     ],
     "numero_acordo": [
         "N DO ACORDO",
-        "Nº DO ACORDO",
+        "NÂº DO ACORDO",
         "NUMERO DO ACORDO",
-        "NÚMERO DO ACORDO",
+        "NÃšMERO DO ACORDO",
         "N DO ACORDO:",
-        "Nº DO ACORDO:",
+        "NÂº DO ACORDO:",
     ],
 }
 
 CONTRAPARTIDAS_HEADERS = {
     "QUANTIDADE": "quantidade",
     "TIPO DE ACAO": "tipo_acao",
-    "TIPO DE AÇÃO": "tipo_acao",
+    "TIPO DE AÃ‡ÃƒO": "tipo_acao",
     "PERIODO": "periodo",
-    "PERÍODO": "periodo",
+    "PERÃODO": "periodo",
     "LOJAS": "lojas",
     "OBS": "obs",
 }
@@ -130,26 +157,26 @@ ITENS_FOCO_HEADERS = {
     "VOLUME MENSAL": "volume_mensal",
     "VOLUMEMENSAL": "volume_mensal",
     "VOLUME PERIODO": "volume_periodo",
-    "VOLUME PERÍODO": "volume_periodo",
+    "VOLUME PERÃODO": "volume_periodo",
 }
 
 CADASTROS_HEADERS = {
     "PRODUTO": "produto",
     "LITRAGEM": "litragem",
     "VERSAO": "versao",
-    "VERSÃO": "versao",
+    "VERSÃƒO": "versao",
     "LOJAS": "abrangencia",
     "ABRANGENCIA": "abrangencia",
-    "ABRANGÊNCIA": "abrangencia",
+    "ABRANGÃŠNCIA": "abrangencia",
     "PRESENCA ATUAL": "abrangencia",
-    "PRESENÇA ATUAL": "abrangencia",
+    "PRESENÃ‡A ATUAL": "abrangencia",
 }
 
 MONTH_ALIASES = {
     "JANEIRO": 1,
     "FEVEREIRO": 2,
     "MARCO": 3,
-    "MARÇO": 3,
+    "MARÃ‡O": 3,
     "ABRIL": 4,
     "MAIO": 5,
     "JUNHO": 6,
@@ -280,6 +307,104 @@ def parse_number(text):
         return None
 
 
+def parse_bool_like(text):
+    norm = normalize_text(text)
+    if norm in {"SIM", "YES", "TRUE", "OK"}:
+        return True
+    if norm in {"NAO", "NÃƒO", "NO", "FALSE"}:
+        return False
+    return None
+
+
+def label_contains_all(norm_label, terms):
+    return all(term in norm_label for term in terms)
+
+
+def match_columnar_rule(label, rules):
+    norm_label = normalize_text(label)
+    for rule in rules:
+        if label_contains_all(norm_label, rule.get("contains_all", [])):
+            return rule
+    return None
+
+
+def set_columnar_value(target, field_name, kind, label, value):
+    text_value = clean_scalar_text(value)
+    if text_value == "":
+        return
+
+    if field_name in target:
+        return
+
+    target[f"{field_name}_label"] = clean_scalar_text(label)
+    target[f"{field_name}_texto"] = text_value
+
+    if kind == "number":
+        numeric = parse_number(text_value)
+        if numeric is not None:
+            target[f"{field_name}_numero"] = numeric
+        target[field_name] = text_value
+        return
+    elif kind == "percent":
+        numeric = parse_number(text_value)
+        if numeric is not None:
+            target[f"{field_name}_percentual"] = numeric
+        target[field_name] = text_value
+        return
+    elif kind == "bool":
+        bool_value = parse_bool_like(text_value)
+        if bool_value is not None:
+            target[field_name] = bool_value
+        return
+
+    target[field_name] = text_value
+
+
+def build_columnar_block(rows, rules, block_name):
+    columnar = {
+        "origem_bloco": block_name,
+        "ajuste_colunar_ativo": True,
+        "campos_nao_mapeados": []
+    }
+
+    for row in rows:
+        descricao = clean_scalar_text(row.get("descricao"))
+        valor = clean_scalar_text(row.get("valor_original"))
+        if not descricao:
+            continue
+
+        matched = match_columnar_rule(descricao, rules)
+        if matched:
+            set_columnar_value(columnar, matched["field"], matched["kind"], descricao, valor)
+            continue
+
+        columnar["campos_nao_mapeados"].append(remove_empty_fields({
+            "descricao": descricao,
+            "valor_original": valor,
+            "valor_numerico": row.get("valor_numerico"),
+            "unidade": row.get("unidade"),
+            "row_excel": row.get("row_excel"),
+        }))
+
+    return remove_empty_fields(columnar)
+
+
+def build_ajuste_colunar(form_result):
+    return remove_empty_fields({
+        "nome_ajuste": "ajuste colunar",
+        "descricao_investimento": build_columnar_block(
+            form_result.get("descricao_investimento_rows", []),
+            AJUSTE_COLUNAR_DESCRICAO_RULES,
+            "descricao_investimento"
+        ),
+        "investimentos_extras": build_columnar_block(
+            form_result.get("investimentos_extras_rows", []),
+            AJUSTE_COLUNAR_EXTRAS_RULES,
+            "investimentos_extras"
+        )
+    })
+
+
 def detect_unit(text):
     if not text:
         return None
@@ -341,7 +466,7 @@ def normalize_period(raw_text):
             "periodo_status": "normalizado"
         }
 
-    m = re.match(r"^([A-ZÇÃÕÉÊÁÍÓÚ]+)\s*/\s*(\d{2,4})$", t)
+    m = re.match(r"^([A-ZÃ‡ÃƒÃ•Ã‰ÃŠÃÃÃ“Ãš]+)\s*/\s*(\d{2,4})$", t)
     if m:
         month = month_name_to_number(m.group(1))
         year = int(m.group(2))
@@ -358,7 +483,7 @@ def normalize_period(raw_text):
             }
 
     m = re.match(
-        r"^([A-ZÇÃÕÉÊÁÍÓÚ]+)\s*/\s*(\d{2,4})\s*(A|ATE|À)\s*([A-ZÇÃÕÉÊÁÍÓÚ]+)\s*/\s*(\d{2,4})$",
+        r"^([A-ZÃ‡ÃƒÃ•Ã‰ÃŠÃÃÃ“Ãš]+)\s*/\s*(\d{2,4})\s*(A|ATE|Ã€)\s*([A-ZÃ‡ÃƒÃ•Ã‰ÃŠÃÃÃ“Ãš]+)\s*/\s*(\d{2,4})$",
         t
     )
     if m:
@@ -382,7 +507,7 @@ def normalize_period(raw_text):
             }
 
     m = re.match(
-        r"^([A-ZÇÃÕÉÊÁÍÓÚ]+)\s*(A|ATE|À)\s*([A-ZÇÃÕÉÊÁÍÓÚ]+)\s*/\s*(\d{2,4})$",
+        r"^([A-ZÃ‡ÃƒÃ•Ã‰ÃŠÃÃÃ“Ãš]+)\s*(A|ATE|Ã€)\s*([A-ZÃ‡ÃƒÃ•Ã‰ÃŠÃÃÃ“Ãš]+)\s*/\s*(\d{2,4})$",
         t
     )
     if m:
@@ -825,7 +950,7 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
         if norm_label in {
             "OBJETIVOS",
             "DESCRICAO DO INVESTIMENTO",
-            "DESCRIÇÃO DO INVESTIMENTO",
+            "DESCRIÃ‡ÃƒO DO INVESTIMENTO",
             "HISTORICO",
             "INVESTIMENTOS EXTRAS",
         }:
@@ -933,7 +1058,7 @@ def categorize_section_label(section_label):
     return "secao_especial"
 
 
-#ajuste aqui ler o bloco sibstituição liberacao
+#ajuste aqui ler o bloco sibstituiÃ§Ã£o liberacao
 def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, header_dict, section_rules=False):
     rows = []
     ctx = build_context(header, sheet_name, form_index)
@@ -948,7 +1073,7 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
 
     current_section = None
 
-    # NOVO: tenta localizar uma seção imediatamente acima do cabeçalho
+    # NOVO: tenta localizar uma seÃ§Ã£o imediatamente acima do cabeÃ§alho
     if section_rules:
         for back_idx in range(header_row_idx - 1, -1, -1):
             back_row = rows_raw[back_idx]
@@ -960,7 +1085,7 @@ def parse_grid_table(rows_raw, header, sheet_name, form_index, tipo_registro, he
                     current_section = back_values[0].rstrip(":").strip()
                     break
 
-            # se encontrou uma linha com várias células, para de procurar acima
+            # se encontrou uma linha com vÃ¡rias cÃ©lulas, para de procurar acima
             if len(back_values) > 1:
                 break
 
@@ -1270,11 +1395,11 @@ def parse_stok_objetivo_compra_table(rows_raw, header, sheet_name, form_index):
         "PRODUTO": "produto",
         "EMBALAGEM": "embalagem",
         "JANEIRO A JUNHO": "objetivo_janeiro_junho",
-        "JANEIRO À JUNHO": "objetivo_janeiro_junho",
+        "JANEIRO Ã€ JUNHO": "objetivo_janeiro_junho",
         "JULHO A DEZEMBRO": "objetivo_julho_dezembro",
-        "JULHO À DEZEMBRO": "objetivo_julho_dezembro",
+        "JULHO Ã€ DEZEMBRO": "objetivo_julho_dezembro",
         "PERIODO": "periodo",
-        "PERÍODO": "periodo",
+        "PERÃODO": "periodo",
         "ATINGIMENTO": "atingimento",
         "INVESTIMENTO %": "investimento_percentual",
     }
@@ -1452,15 +1577,15 @@ def split_contrapartidas_and_encartes(rows_raw):
     encartes_block_name = None
     split_labels = {
         "SUGESTAO DE ENCARTES",
-        "SUGESTÃO DE ENCARTES",
+        "SUGESTÃƒO DE ENCARTES",
         "ENCARTES OBRIGATORIOS",
-        "ENCARTES OBRIGATÓRIOS",
+        "ENCARTES OBRIGATÃ“RIOS",
         "ENCARTES SUGESTAO",
-        "ENCARTES SUGESTÃO",
+        "ENCARTES SUGESTÃƒO",
         "ITENS EM ACAO OBRIGATORIOS",
-        "ITENS EM AÇÃO OBRIGATÓRIOS",
+        "ITENS EM AÃ‡ÃƒO OBRIGATÃ“RIOS",
         "ITENS PONTA DE GONDOLA OBRIGATORIOS",
-        "ITENS PONTA DE GÔNDOLA OBRIGATÓRIOS",
+        "ITENS PONTA DE GÃ”NDOLA OBRIGATÃ“RIOS",
     }
 
     norm_split_labels = {normalize_text(x) for x in split_labels}
@@ -1719,7 +1844,7 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
                 form_index,
                 "descricao_investimento_compacto",
                 None,
-                ignored_titles=["DESCRIÇÃO DO INVESTIMENTO", "DESCRICAO DO INVESTIMENTO", block_info["label_found"]]
+                ignored_titles=["DESCRIÃ‡ÃƒO DO INVESTIMENTO", "DESCRICAO DO INVESTIMENTO", block_info["label_found"]]
             )
             if descricao_compacta_rows:
                 result["descricao_investimento_compacto_rows"].extend(descricao_compacta_rows)
@@ -1915,6 +2040,7 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
 
     split_premissas_from_result(result)
     split_objetivo_compra_from_cadastros(result)
+    result["ajuste_colunar"] = build_ajuste_colunar(result)
     result["header"] = remove_empty_fields(result["header"])
     result["identified_blocks"] = list(dict.fromkeys(result["identified_blocks"]))
     return remove_empty_fields(result)
@@ -1970,8 +2096,8 @@ def enrich_bonato_second_form(ws, forms):
             continue
 
         objetivos_rows = [
-            build_manual_compact_record(form, ws.title, 16, "OBJETIVO DE VOLUME/MÊS (CAIXAS):", ws.cell(16, 42).value, "objetivo_compacto"),
-            build_manual_compact_record(form, ws.title, 19, "OBJETIVO DE VOLUME/TOTAL DO PERÍODO (CAIXAS):", ws.cell(19, 42).value, "objetivo_compacto"),
+            build_manual_compact_record(form, ws.title, 16, "OBJETIVO DE VOLUME/MÃŠS (CAIXAS):", ws.cell(16, 42).value, "objetivo_compacto"),
+            build_manual_compact_record(form, ws.title, 19, "OBJETIVO DE VOLUME/TOTAL DO PERÃODO (CAIXAS):", ws.cell(19, 42).value, "objetivo_compacto"),
             build_manual_compact_record(form, ws.title, 22, "MODALIDADE DE CARREGAMENTO:", ws.cell(22, 42).value, "objetivo_compacto"),
         ]
         objetivos_rows = [row for row in objetivos_rows if row.get("valor_original")]
@@ -2040,11 +2166,11 @@ def process_sheet(ws):
 def main():
     try:
         if len(sys.argv) < 2:
-            raise Exception("Caminho do arquivo não informado.")
+            raise Exception("Caminho do arquivo nÃ£o informado.")
 
         file_path = sys.argv[1]
         if not os.path.exists(file_path):
-            raise Exception("Arquivo não encontrado.")
+            raise Exception("Arquivo nÃ£o encontrado.")
 
         wb = load_workbook(file_path, data_only=True)
 
