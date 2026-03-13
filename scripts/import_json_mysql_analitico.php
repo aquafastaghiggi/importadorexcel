@@ -35,7 +35,7 @@ $pdo = new PDO(
 );
 
 const TABLE_COLUMNS = [
-    'historico' => ['linha_ordem', 'ano_bloco', 'descricao', 'valor_original', 'valor_numerico', 'unidade', 'row_excel', 'linha_original'],
+    'historico' => ['linha_ordem', 'tipo_registro', 'ano_bloco', 'descricao', 'valor_original', 'valor_numerico', 'unidade', 'row_excel', 'linha_original'],
     'objetivos' => ['linha_ordem', 'tipo_registro', 'ano_bloco', 'descricao', 'valor_original', 'valor_numerico', 'unidade', 'gatilho_anual', 'faturamento', 'lava_roupas_liquido', 'amaciante_concentrado', 'observacao', 'lado_layout', 'row_excel', 'linha_original'],
     'descricao_investimento' => ['linha_ordem', 'tipo_registro', 'descricao', 'valor_original', 'valor_numerico', 'unidade', 'observacao', 'lado_layout', 'row_excel', 'linha_original'],
     'premissas_gerais' => ['linha_ordem', 'descricao', 'valor_original', 'row_excel', 'linha_original'],

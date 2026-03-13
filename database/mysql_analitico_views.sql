@@ -43,6 +43,7 @@ SELECT
     vf.*,
     h.id AS historico_id,
     h.linha_ordem,
+    h.tipo_registro,
     h.ano_bloco,
     h.descricao,
     h.valor_original,

@@ -13,7 +13,7 @@ except ImportError:
     print(json.dumps({
         "success": False,
         "error": "Biblioteca openpyxl nÃ£o instalada. Execute: python -m pip install openpyxl"
-    }, ensure_ascii=False))
+    }))
     sys.exit(1)
 
 
@@ -807,6 +807,20 @@ def row_to_joined(row_obj):
     return " | ".join(clean_scalar_text(cell["value"]) for cell in row_obj["cells"])
 
 
+def extract_trailing_year_from_label(label):
+    text = clean_scalar_text(label)
+    if not text:
+        return "", None
+
+    match = re.match(r"^(.*?)\s*\|\s*(\d{4})\s*$", text)
+    if not match:
+        return text, None
+
+    cleaned_label = clean_scalar_text(match.group(1))
+    year = int(match.group(2))
+    return cleaned_label, year
+
+
 def build_context(header, sheet_name, form_index):
     return {
         "cliente": header.get("cliente"),
@@ -959,6 +973,10 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
         if re.match(r"^[A-Z]{3,4}-[A-Z]{3,4}$", norm_label) and re.match(r"^\d{4}-\d{2}-\d{2}", norm_value):
             continue
 
+        label, label_year = extract_trailing_year_from_label(label)
+        if label_year is not None:
+            norm_label = normalize_text(label)
+
         item = {
             **ctx,
             "tipo_registro": tipo_registro,
@@ -966,7 +984,7 @@ def parse_kv_list(rows_raw, header, sheet_name, form_index, tipo_registro, title
             "valor_original": value,
             "valor_numerico": parse_number(value),
             "unidade": detect_unit(f"{label} {value}"),
-            "ano_bloco": title_year,
+            "ano_bloco": label_year if label_year is not None else title_year,
             "linha_ordem": order,
             "row_excel": row["row_excel"],
             "linha_original": joined
@@ -2186,13 +2204,13 @@ def main():
             ws = wb[sheet_name]
             output["sheets"].append(process_sheet(ws))
 
-        print(json.dumps(remove_empty_fields(output), ensure_ascii=False))
+        print(json.dumps(remove_empty_fields(output)))
 
     except Exception as e:
         print(json.dumps({
             "success": False,
             "error": str(e)
-        }, ensure_ascii=False))
+        }))
 
 
 if __name__ == "__main__":

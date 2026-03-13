@@ -339,17 +339,39 @@ function is_descriptive_metric_rows(array $rows): bool
 function render_descriptive_metric_table(array $rows, string $titulo): void
 {
     $displayRows = [];
+    $columns = ['descricao', 'valor_original'];
+    $hasYearColumn = false;
+
     foreach ($rows as $row) {
-        $displayRows[] = [
-            'descricao' => $row['descricao'] ?? '',
+        $descricao = (string)($row['descricao'] ?? '');
+        $anoBloco = $row['ano_bloco'] ?? null;
+
+        if (($anoBloco === null || $anoBloco === '') && preg_match('/\|\s*(\d{4})\s*$/', $descricao, $matches)) {
+            $anoBloco = $matches[1];
+            $descricao = trim((string)preg_replace('/\s*\|\s*\d{4}\s*$/', '', $descricao));
+        }
+
+        $displayRow = [
+            'descricao' => $descricao,
             'valor_original' => format_business_value_by_description(
-                (string)($row['descricao'] ?? ''),
+                $descricao,
                 $row['valor_original'] ?? ''
             ),
         ];
+
+        if ($anoBloco !== '' && $anoBloco !== null) {
+            $displayRow['ano_bloco'] = $anoBloco;
+            $hasYearColumn = true;
+        }
+
+        $displayRows[] = $displayRow;
     }
 
-    render_assoc_table($displayRows, $titulo, null, ['descricao', 'valor_original']);
+    if ($hasYearColumn) {
+        $columns = ['ano_bloco', 'descricao', 'valor_original'];
+    }
+
+    render_assoc_table($displayRows, $titulo, null, $columns);
 }
 
 function should_format_definition_value_as_percent(string $descricao, $valor): bool
