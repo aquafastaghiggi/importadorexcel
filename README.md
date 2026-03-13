@@ -124,3 +124,9 @@ php -l index.php
 php -l index-ok.php
 python -m py_compile python/process_excel.py
 ```
+
+## Mapeamento para Power BI
+
+Existe uma documentacao basica de uso das views do banco analitico em:
+
+- `docs/mapeamento_views_pbi.md`
