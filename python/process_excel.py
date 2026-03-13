@@ -1679,20 +1679,6 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
             )
 
         elif effective_block == "objetivos":
-            objetivos_compactos_rows = parse_compact_side_pairs(
-                rows_raw,
-                result["header"],
-                sheet_name,
-                form_index,
-                "objetivo_compacto",
-                title_year,
-                ignored_titles=["OBJETIVOS PARA O INVESTIMENTO", "OBJETIVOS", block_info["label_found"]]
-            )
-            if objetivos_compactos_rows:
-                result["objetivos_compactos_rows"].extend(objetivos_compactos_rows)
-                if "objetivos_compactos" not in result["identified_blocks"]:
-                    result["identified_blocks"].append("objetivos_compactos")
-
             objetivos_table_rows = parse_objectives_table(
                 rows_raw,
                 result["header"],
@@ -1706,6 +1692,21 @@ def process_form_grid(grid, sheet_name, form_index, region_meta):
                 result["objetivos_rows"].extend(
                     parse_kv_list(rows_raw, result["header"], sheet_name, form_index, "objetivo", title_year)
                 )
+
+            if not objetivos_table_rows:
+                objetivos_compactos_rows = parse_compact_side_pairs(
+                    rows_raw,
+                    result["header"],
+                    sheet_name,
+                    form_index,
+                    "objetivo_compacto",
+                    title_year,
+                    ignored_titles=["OBJETIVOS PARA O INVESTIMENTO", "OBJETIVOS", block_info["label_found"]]
+                )
+                if objetivos_compactos_rows:
+                    result["objetivos_compactos_rows"].extend(objetivos_compactos_rows)
+                    if "objetivos_compactos" not in result["identified_blocks"]:
+                        result["identified_blocks"].append("objetivos_compactos")
 
         elif effective_block == "descricao_investimento":
             result["descricao_investimento_rows"].extend(
